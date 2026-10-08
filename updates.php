@@ -10,6 +10,7 @@ final class PICTS_Plugin_Update {
             && preg_match('/^[A-Za-z0-9_-]+\/[A-Za-z0-9_.-]+\.php$/D', $target['plugin_id'])
             && !str_contains($target['plugin_id'], '..')
             && $target['plugin_id'] !== 'primary-ict-site-connector/primary-ict-site-connector.php'
+            && (!isset($target['source']) || (is_array($target['source']) && PICTS_GitHub_Source::valid($target['source'], $target['plugin_id'], (string) ($target['to_version'] ?? ''))))
             && is_string($target['from_version'] ?? null) && strlen($target['from_version']) > 0 && strlen($target['from_version']) <= 80
             && is_string($target['to_version'] ?? null) && strlen($target['to_version']) > 0 && strlen($target['to_version']) <= 80
             && $target['from_version'] !== $target['to_version'] && is_bool($target['active'] ?? null);
@@ -35,10 +36,16 @@ final class PICTS_Plugin_Update {
         $candidate = $updates->response[$id] ?? null;
         if (!$plugin || !$candidate || (string) ($plugin['Version'] ?? '') !== $target['from_version'] || (string) ($candidate->new_version ?? '') !== $target['to_version'] || is_plugin_active($id) !== $target['active'] || (!empty($candidate->plugin) && $candidate->plugin !== $id)) { return 'candidate_changed'; }
         $uri = (string) ($plugin['UpdateURI'] ?? '');
+        if (isset($target['source'])) {
+            if ($uri !== 'https://github.com/' . $target['source']['repository']) { return 'unsupported_site'; }
+            if (!PICTS_GitHub_Source::resolve($target)) { return 'provider_check_failed'; }
+            if (($candidate->package ?? '') !== PICTS_GitHub_Source::package($target['source'])) { return 'candidate_changed'; }
+        } else {
         if ($uri !== '' && wp_parse_url($uri, PHP_URL_HOST) !== 'wordpress.org') { return 'unsupported_site'; }
         $package = wp_parse_url((string) ($candidate->package ?? ''));
         $slug = (string) ($candidate->slug ?? '');
         if (!preg_match('/^[a-z0-9-]+$/D', $slug) || !$package || ($package['scheme'] ?? '') !== 'https' || ($package['host'] ?? '') !== 'downloads.wordpress.org' || !empty($package['user']) || !empty($package['pass']) || !empty($package['port']) || !empty($package['query']) || !empty($package['fragment']) || !preg_match('/^\/plugin\/' . preg_quote($slug, '/') . '\.[A-Za-z0-9_.-]+\.zip$/D', $package['path'] ?? '')) { return 'unsupported_site'; }
+        }
         if (!is_wp_version_compatible((string) ($candidate->requires ?? '')) || !is_php_version_compatible((string) ($candidate->requires_php ?? ''))) { return 'incompatible'; }
         if (get_filesystem_method([], WP_PLUGIN_DIR) !== 'direct' || !WP_Filesystem([], WP_PLUGIN_DIR)) { return 'filesystem_unavailable'; }
         return null;
@@ -51,6 +58,9 @@ final class PICTS_Plugin_Update {
         if ($reason) { self::stop($pending, $reason); return; }
         require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
         if (!WP_Upgrader::create_lock('auto_updater')) { self::stop($pending, 'updater_busy'); return; }
+        $target = $pending['job']['target'];
+        $download = isset($target['source']) ? static fn ($reply, $package, $upgrader, $extra) => PICTS_GitHub_Source::download($reply, $package, $extra, $target) : null;
+        if ($download) { add_filter('upgrader_pre_download', $download, PHP_INT_MAX, 4); }
         $translations = ['Language_Pack_Upgrader', 'async_upgrade'];
         $priority = has_action('upgrader_process_complete', $translations);
         if ($priority !== false) { remove_action('upgrader_process_complete', $translations, $priority); }
@@ -72,6 +82,7 @@ final class PICTS_Plugin_Update {
             $pending['executed_request'] = self::request_id();
             $pending['stage'] = 'verify'; // The next invocation boots WordPress with the new files.
         } finally {
+            if ($download) { remove_filter('upgrader_pre_download', $download, PHP_INT_MAX); }
             if ($priority !== false) { add_action('upgrader_process_complete', $translations, $priority, 2); }
             WP_Upgrader::release_lock('auto_updater');
         }

@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Primary ICT Support Site Connector
  * Description: Pairs this site with the Primary ICT Support dashboard and collects WordPress/PHP inventory and runs authorised plugin updates.
- * Version: 0.4.1
+ * Version: 0.5.0
  * Author: Primary ICT Support
  * Requires at least: 6.5
  * Requires PHP: 8.0
@@ -13,6 +13,7 @@
 if (!defined('ABSPATH')) { exit; }
 require_once __DIR__ . '/includes/class-primary-ict-support-admin-menu.php';
 require_once __DIR__ . '/includes/class-primary-ict-support-github-updater.php';
+require_once __DIR__ . '/github.php';
 require_once __DIR__ . '/updates.php';
 require_once __DIR__ . '/jobs.php';
 
@@ -20,7 +21,7 @@ final class PICTS_Site_Connector {
     private const OPTION = 'picts_connector_settings';
     private const HOOK = 'picts_connector_inventory';
     private const RESUME_HOOK = 'picts_connector_inventory_resume';
-    private const VERSION = '0.4.1';
+    private const VERSION = '0.5.0';
 
     public static function init(): void {
         add_filter('cron_schedules', [self::class, 'cron_schedule']);

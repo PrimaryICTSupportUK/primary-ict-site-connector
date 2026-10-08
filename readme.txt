@@ -2,7 +2,7 @@
 Contributors: primaryict
 Requires at least: 6.5
 Requires PHP: 8.0
-Stable tag: 0.4.1
+Stable tag: 0.5.0
 License: GPLv2 or later
 
 WordPress inventory and queued diagnostic checks for the Primary ICT Support staff dashboard. Runs individually authorised dashboard plugin updates.
@@ -36,3 +36,9 @@ Delete the plugin to remove its local settings and credential. Ask the dashboard
 
 == Connector GitHub releases ==
 The native WordPress updater uses public releases from PrimaryICTSupportUK/primary-ict-site-connector. The repository/release channel must be published before automatic discovery works. Releases require a stable vMAJOR.MINOR.PATCH tag, the exact primary-ict-site-connector-VERSION.zip asset and its GitHub SHA-256 digest. Normal WordPress update controls and optional native automatic updates are used; the connector does not enable them for you. No GitHub credential is stored on the site. The dashboard still excludes connector self-updates and custom plugin installation jobs.
+
+== Changelog ==
+
+= 0.5.0 =
+* Adds per-site trusted public GitHub plugin updates with pinned release metadata, SHA-256 and archive verification.
+* Preserves pairing, shared menu and WordPress.org update support.
