@@ -2,8 +2,8 @@
 /** Public GitHub Releases updater, shared by independent Primary ICT plugins. */
 if (!defined('ABSPATH')) { exit; }
 
-if (!class_exists('Primary_ICT_Support_GitHub_Updater')) {
-    final class Primary_ICT_Support_GitHub_Updater {
+if (!class_exists('Primary_ICT_Support_GitHub_Updater_V2')) {
+    final class Primary_ICT_Support_GitHub_Updater_V2 {
         private array $config;
         private string $file;
         private string $cache;
@@ -54,8 +54,36 @@ if (!class_exists('Primary_ICT_Support_GitHub_Updater')) {
             $body = !is_wp_error($response) && wp_remote_retrieve_response_code($response) === 200 ? json_decode(wp_remote_retrieve_body($response), true) : null;
             $release = is_array($body) ? $this->parse_release($body) : null;
             // Cache errors briefly too, so an unpublished channel or rate limit cannot hammer GitHub.
-            set_site_transient($this->cache, ['release' => $release], $release ? 6 * HOUR_IN_SECONDS : 15 * MINUTE_IN_SECONDS);
+            $code = is_wp_error($response) ? 0 : wp_remote_retrieve_response_code($response);
+            $status = $release ? 'verified' : ($code === 429 || $code === 403 ? 'rate_limited' : ($code === 200 ? 'no_valid_release' : 'provider_unavailable'));
+            $ttl = $release ? 6 * HOUR_IN_SECONDS : 15 * MINUTE_IN_SECONDS;
+            set_site_transient($this->cache, ['release' => $release, 'status' => $status, 'checked_at' => time(), 'next_check_at' => time() + $ttl], $ttl);
             return $release;
+        }
+
+        public function release_status(): array {
+            $cached = get_site_transient($this->cache);
+            return ['status' => is_array($cached) ? ($cached['status'] ?? 'not_recorded') : 'not_checked',
+                'checked_at' => is_array($cached) ? ($cached['checked_at'] ?? null) : null,
+                'next_check_at' => is_array($cached) ? ($cached['next_check_at'] ?? null) : null,
+                'version' => is_array($cached) ? ($cached['release']['version'] ?? null) : null];
+        }
+
+        /** Atomic cooldown: repeated admin clicks cannot hammer GitHub. */
+        public function refresh_release(): array {
+            $lock = $this->cache . '_manual';
+            $previous = (string) get_option($lock, '');
+            if ($previous !== '' && (int) $previous > time() - MINUTE_IN_SECONDS) { return ['status' => 'cooldown']; }
+            if ($previous !== '') {
+                global $wpdb;
+                // Delete only the expired value we observed; never another request's new lock.
+                $wpdb->query($wpdb->prepare("DELETE FROM {$wpdb->options} WHERE option_name = %s AND option_value = %s", $lock, $previous));
+                wp_cache_delete($lock, 'options');
+            }
+            if (!add_option($lock, time(), '', false)) { return ['status' => 'cooldown']; }
+            delete_site_transient($this->cache);
+            $this->release();
+            return $this->release_status();
         }
 
         public function check_update($update, array $plugin_data, string $plugin_file, array $locales) {
@@ -110,3 +138,5 @@ if (!class_exists('Primary_ICT_Support_GitHub_Updater')) {
         }
     }
 }
+
+if (!class_exists('Primary_ICT_Support_GitHub_Updater')) { class_alias('Primary_ICT_Support_GitHub_Updater_V2', 'Primary_ICT_Support_GitHub_Updater'); }

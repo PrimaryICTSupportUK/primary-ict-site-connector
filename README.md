@@ -19,7 +19,7 @@ The server-side dashboard still excludes connector self-updates from its mainten
 5. Check the published asset has its GitHub SHA-256 digest and install/test it on the pilot.
 
 Native discovery caches metadata for six hours; failures for fifteen minutes. Stable releases
-only; a GitHub source archive is not a substitute for the installable ZIP. Both the URL and
+only; use Check connector updates now for a bounded immediate refresh. Last/next check and failure status are visible. A GitHub source archive is not a substitute for the installable ZIP. Both the URL and
 download checksum are verified. Repository access control protects release authenticity.
 
 License: GPL-2.0-or-later.

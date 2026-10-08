@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Primary ICT Support Site Connector
  * Description: Pairs this site with the Primary ICT Support dashboard and collects WordPress/PHP inventory and runs authorised plugin updates.
- * Version: 0.5.0
+ * Version: 0.5.1
  * Author: Primary ICT Support
  * Requires at least: 6.5
  * Requires PHP: 8.0
@@ -21,7 +21,8 @@ final class PICTS_Site_Connector {
     private const OPTION = 'picts_connector_settings';
     private const HOOK = 'picts_connector_inventory';
     private const RESUME_HOOK = 'picts_connector_inventory_resume';
-    private const VERSION = '0.5.0';
+    private const VERSION = '0.5.1';
+    private static ?Primary_ICT_Support_GitHub_Updater_V2 $updater = null;
 
     public static function init(): void {
         add_filter('cron_schedules', [self::class, 'cron_schedule']);
@@ -44,10 +45,11 @@ final class PICTS_Site_Connector {
                 wp_safe_redirect(add_query_arg('picts_notice', sanitize_key($_GET['picts_notice'] ?? ''), admin_url('admin.php?page=picts-connector'))); exit;
             }
         });
-        new Primary_ICT_Support_GitHub_Updater(__FILE__, [
+        self::$updater = new Primary_ICT_Support_GitHub_Updater_V2(__FILE__, [
             'repository' => 'PrimaryICTSupportUK/primary-ict-site-connector', 'name' => 'Primary ICT Support Site Connector',
             'description' => 'WordPress inventory, dashboard pairing and authorised maintenance jobs.', 'requires_wp' => '6.5', 'requires_php' => '8.0',
         ]);
+        add_action('admin_post_picts_release_check', [self::class, 'manual_release_check']);
         add_action('admin_post_picts_pair', [self::class, 'pair']);
         add_action('admin_post_picts_inventory', [self::class, 'manual_inventory']);
         add_action(self::HOOK, [self::class, 'send_inventory']);
@@ -206,10 +208,22 @@ final class PICTS_Site_Connector {
         self::finish(self::send_inventory() ? 'sent' : 'send_failed');
     }
 
+    public static function manual_release_check(): void {
+        if (!current_user_can('manage_options')) { wp_die('Administrator access is required.'); }
+        check_admin_referer('picts_release_check');
+        $status = self::$updater ? self::$updater->refresh_release() : ['status' => 'provider_unavailable'];
+        if (($status['status'] ?? '') === 'verified') {
+            // Run the normal WordPress discovery hook against refreshed metadata.
+            delete_site_transient('update_plugins');
+            wp_update_plugins();
+        }
+        self::finish('release_' . ($status['status'] ?? 'provider_unavailable'));
+    }
+
     public static function settings_page(): void {
         if (!current_user_can('manage_options')) { return; }
         $settings = self::settings();
-        $notices = ['paired' => 'Site paired. Check the inventory result below.', 'sent' => 'Inventory sent successfully.', 'invalid' => 'Enter the HTTPS dashboard origin, site ID and current pairing code.', 'failed' => 'Pairing failed. Check the service URL, site domain, site ID and code expiry.', 'send_failed' => 'Inventory is incomplete or could not be sent. Check the result below; larger catalogues resume through WP-Cron.'];
+        $notices = ['release_verified' => 'GitHub release checked. Review Plugins or Dashboard → Updates.', 'release_cooldown' => 'Wait one minute before checking again.', 'release_rate_limited' => 'GitHub rate limit reached. Try again after the next automatic check.', 'release_no_valid_release' => 'No supported stable release was found. This does not prove the connector is up to date.', 'release_provider_unavailable' => 'GitHub could not be reached. The last installed version is unchanged.', 'paired' => 'Site paired. Check the inventory result below.', 'sent' => 'Inventory sent successfully.', 'invalid' => 'Enter the HTTPS dashboard origin, site ID and current pairing code.', 'failed' => 'Pairing failed. Check the service URL, site domain, site ID and code expiry.', 'send_failed' => 'Inventory is incomplete or could not be sent. Check the result below; larger catalogues resume through WP-Cron.'];
         $notice = sanitize_key($_GET['picts_notice'] ?? '');
         echo '<div class="wrap picts-plugin-page picts-dashboard"><div class="picts-plugin-page__hero"><div><p class="picts-plugin-page__eyebrow">Primary ICT Support</p><h1>Site Connector</h1><p class="picts-plugin-page__intro">Version ' . esc_html(self::VERSION) . ' · Inventory, dashboard checks and authorised plugin updates.</p></div><img class="picts-plugin-page__logo" src="' . esc_url(plugins_url('assets/images/primary-ict-support-logo.svg', __FILE__)) . '" alt="Primary ICT Support"></div><div class="picts-plugin-page__panel">';
         if (isset($notices[$notice])) { echo '<div class="notice notice-info"><p>' . esc_html($notices[$notice]) . '</p></div>'; }
@@ -229,9 +243,16 @@ final class PICTS_Site_Connector {
         echo '<table class="form-table"><tr><th><label for="picts-service">Dashboard service URL</label></th><td><input id="picts-service" class="regular-text" name="service_url" type="url" required placeholder="https://your-dashboard.vercel.app" value="' . esc_attr($settings['service_url'] ?? '') . '"></td></tr>';
         echo '<tr><th><label for="picts-site">Site ID</label></th><td><input id="picts-site" class="regular-text" name="site_id" required value="' . esc_attr($settings['site_id'] ?? '') . '"></td></tr>';
         echo '<tr><th><label for="picts-code">Pairing code</label></th><td><input id="picts-code" class="regular-text" name="pairing_code" type="password" autocomplete="off" required></td></tr>';
-        echo '<tr><th><label for="picts-interval">Inventory interval (minutes)</label></th><td><input id="picts-interval" name="interval" type="number" min="5" max="1440" value="' . esc_attr($settings['interval'] ?? 15) . '"><p class="description">WP-Cron depends on site traffic. This is not a guaranteed monitoring or update schedule.</p></td></tr></table>';
+        echo '<tr><th><label for="picts-interval">Inventory interval (minutes)</label></th><td><input id="picts-interval" name="interval" type="number" min="5" max="1440" value="' . esc_attr($settings['interval'] ?? 15) . '"><p class="description">Dashboard wakeups can run cron without visitors. Blocked cron or an offline service can delay collection. This is not an automatic update schedule.</p></td></tr></table>';
         submit_button('Pair site');
-        echo '</form><h2>Connector releases</h2><p>Published GitHub releases will appear in Plugins and Dashboard → Updates once the connector release repository is available. WordPress automatic updates are optional: enable them for this connector in Plugins if wanted. Updating the connector preserves its pairing settings.</p><p>Dashboard jobs currently support authorised individual WordPress.org plugin updates. PHP configuration limits are not live server usage; host quotas and complete site-health checks need further integration.</p></div></div>';
+        echo '</form><h2>Connector releases</h2>';
+        $release = self::$updater ? self::$updater->release_status() : ['status' => 'not_checked'];
+        echo '<p>Status: ' . esc_html(str_replace('_', ' ', $release['status'])) . (!empty($release['version']) ? ' · Latest verified release: ' . esc_html($release['version']) : '') . '</p>';
+        echo '<p>Last check: ' . (!empty($release['checked_at']) ? esc_html(wp_date('j M Y, H:i', $release['checked_at'])) : 'Not recorded') . ' · Next automatic check eligible: ' . (!empty($release['next_check_at']) ? esc_html(wp_date('j M Y, H:i', $release['next_check_at'])) : 'On next WordPress update check') . '</p>';
+        echo '<form action="' . esc_url(admin_url('admin-post.php')) . '" method="post"><input type="hidden" name="action" value="picts_release_check">';
+        wp_nonce_field('picts_release_check'); submit_button('Check connector updates now', 'secondary');
+        echo '</form><details><summary>How connector updates work</summary><p>Use normal WordPress Update now controls. Successful release checks cache for six hours, failures for fifteen minutes. Updating preserves pairing. Automatic updates can be enabled for this connector in Plugins. Dashboard jobs exclude connector self-updates.</p></details><details><summary>Supported dashboard operations</summary><p>Individual allowlisted WordPress.org or trusted public GitHub plugin updates. The service independently checks a public page before and after installation. PHP configuration limits are not live server consumption.</p></details></div></div>';
+
     }
 }
 

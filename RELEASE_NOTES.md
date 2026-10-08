@@ -1,5 +1,6 @@
-Shared Primary ICT Support menu and branding; dedicated Site Connector settings page.
-Trusted GitHub dashboard updates with pinned release, SHA-256 and archive checks.
-Old settings bookmarks and post-action redirects point to the shared menu.
-Native WordPress GitHub release updater with exact asset validation and SHA-256 integrity checks.
-Pairing/inventory/job settings preserved. Trusted public GitHub dashboard updates require connector 0.5.0 and the compatible service.
+Connector 0.5.1: bounded native GitHub refresh with last/next check times and safe provider failure states.
+Versioned shared updater remains available when another plugin loads an older helper first.
+Dashboard job requests allow twenty seconds for independent public-page checks.
+Pairing, shared menu, inventory and existing job settings are preserved.
+Requires the Phase 1 compatible dashboard service, deployed before this release.
+Normal WordPress update controls apply; automatic connector updates are not enabled by this release.

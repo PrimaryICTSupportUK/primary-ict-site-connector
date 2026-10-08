@@ -6,7 +6,7 @@ final class PICTS_Check_Jobs {
     private const HOOK = 'picts_connector_poll';
     private const RESUME = 'picts_connector_job_resume';
     private const PENDING = 'picts_connector_pending_job';
-    private const VERSION = '0.5.0';
+    private const VERSION = '0.5.1';
     public static function init(): void {
         add_filter('cron_schedules', [self::class, 'schedule']);
         add_action('init', [self::class, 'ensure_schedule']);
@@ -48,7 +48,7 @@ final class PICTS_Check_Jobs {
     private static function request(array $body): array {
         $settings = (array) get_option('picts_connector_settings', []);
         $response = wp_safe_remote_post($settings['service_url'] . '/api/plugin/jobs', [
-            'timeout' => 10, 'redirection' => 0, 'sslverify' => true,
+            'timeout' => 20, 'redirection' => 0, 'sslverify' => true,
             'headers' => ['Content-Type' => 'application/json', 'Authorization' => 'Bearer ' . $settings['token']],
             'body' => wp_json_encode(array_merge(['site_id' => $settings['site_id'], 'plugin_version' => self::VERSION], $body)),
             'limit_response_size' => 30000,
