@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: Primary ICT Support Site Connector
- * Description: Pairs this site with the Primary ICT Support dashboard and collects WordPress/PHP inventory and runs authorised plugin updates.
- * Version: 0.5.1
+ * Description: Pairs this site with the Primary ICT Support dashboard and collects WordPress/PHP inventory and runs authorised component updates.
+ * Version: 0.6.0
  * Author: Primary ICT Support
  * Requires at least: 6.5
  * Requires PHP: 8.0
@@ -21,7 +21,7 @@ final class PICTS_Site_Connector {
     private const OPTION = 'picts_connector_settings';
     private const HOOK = 'picts_connector_inventory';
     private const RESUME_HOOK = 'picts_connector_inventory_resume';
-    private const VERSION = '0.5.1';
+    private const VERSION = '0.6.0';
     private static ?Primary_ICT_Support_GitHub_Updater_V2 $updater = null;
 
     public static function init(): void {
@@ -225,7 +225,7 @@ final class PICTS_Site_Connector {
         $settings = self::settings();
         $notices = ['release_verified' => 'GitHub release checked. Review Plugins or Dashboard → Updates.', 'release_cooldown' => 'Wait one minute before checking again.', 'release_rate_limited' => 'GitHub rate limit reached. Try again after the next automatic check.', 'release_no_valid_release' => 'No supported stable release was found. This does not prove the connector is up to date.', 'release_provider_unavailable' => 'GitHub could not be reached. The last installed version is unchanged.', 'paired' => 'Site paired. Check the inventory result below.', 'sent' => 'Inventory sent successfully.', 'invalid' => 'Enter the HTTPS dashboard origin, site ID and current pairing code.', 'failed' => 'Pairing failed. Check the service URL, site domain, site ID and code expiry.', 'send_failed' => 'Inventory is incomplete or could not be sent. Check the result below; larger catalogues resume through WP-Cron.'];
         $notice = sanitize_key($_GET['picts_notice'] ?? '');
-        echo '<div class="wrap picts-plugin-page picts-dashboard"><div class="picts-plugin-page__hero"><div><p class="picts-plugin-page__eyebrow">Primary ICT Support</p><h1>Site Connector</h1><p class="picts-plugin-page__intro">Version ' . esc_html(self::VERSION) . ' · Inventory, dashboard checks and authorised plugin updates.</p></div><img class="picts-plugin-page__logo" src="' . esc_url(plugins_url('assets/images/primary-ict-support-logo.svg', __FILE__)) . '" alt="Primary ICT Support"></div><div class="picts-plugin-page__panel">';
+        echo '<div class="wrap picts-plugin-page picts-dashboard"><div class="picts-plugin-page__hero"><div><p class="picts-plugin-page__eyebrow">Primary ICT Support</p><h1>Site Connector</h1><p class="picts-plugin-page__intro">Version ' . esc_html(self::VERSION) . ' · Inventory, dashboard checks and authorised component updates.</p></div><img class="picts-plugin-page__logo" src="' . esc_url(plugins_url('assets/images/primary-ict-support-logo.svg', __FILE__)) . '" alt="Primary ICT Support"></div><div class="picts-plugin-page__panel">';
         if (isset($notices[$notice])) { echo '<div class="notice notice-info"><p>' . esc_html($notices[$notice]) . '</p></div>'; }
         if (!empty($settings['token'])) {
             $last = (array) get_option('picts_connector_last_result', []);
