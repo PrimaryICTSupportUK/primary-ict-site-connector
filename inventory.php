@@ -49,6 +49,8 @@ final class PICTS_Inventory {
         require_once ABSPATH . 'wp-admin/includes/update.php';
         $components = [];
         $updates = [];
+        $core_candidates = [];
+        $translation_candidates = [];
         $plugin_check = get_site_transient('update_plugins');
         $theme_check = get_site_transient('update_themes');
         $core_check = get_site_transient('update_core');
@@ -58,6 +60,11 @@ final class PICTS_Inventory {
         foreach (['plugin' => get_plugins(), 'mu_plugin' => get_mu_plugins(), 'dropin' => get_dropins()] as $kind => $plugins) {
             foreach ($plugins as $file => $data) {
                 $component = self::component($kind, $file, $data, (array) ($plugin_responses[$file] ?? []), $kind === 'plugin' ? $plugin_no_updates : [], $plugin_auto);
+                if ($kind === 'plugin') {
+                    $package = wp_parse_url((string) ($plugin_responses[$file]->package ?? ''));
+                    $host = strtolower((string) ($package['host'] ?? ''));
+                    $component['native_package_host'] = $component['provider'] === 'custom' && ($package['scheme'] ?? '') === 'https' && empty($package['user']) && empty($package['pass']) && empty($package['port']) && preg_match('/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/D', $host) ? $host : null;
+                }
                 $components[] = $component;
                 if ($component['update_status'] === 'available') {
                     $updates[] = ['slug' => $file, 'name' => $component['name'], 'type' => 'plugin', 'current_version' => $component['version'], 'target_version' => $component['target_version']];
@@ -84,14 +91,17 @@ final class PICTS_Inventory {
         }
         foreach ((array) ($core_check->updates ?? []) as $update) {
             if (($update->response ?? '') === 'upgrade' && !empty($update->current)) {
+                $core_candidates[] = ['version'=>self::text($update->current, 40), 'locale'=>self::text($update->locale ?? 'en_US', 40)];
+                if (count($core_candidates) === 1) {
                 $updates[] = ['slug' => 'wordpress', 'name' => 'WordPress core', 'type' => 'core', 'current_version' => get_bloginfo('version'), 'target_version' => self::text($update->current, 40)];
-                break;
+                }
             }
         }
         foreach (wp_get_translation_updates() as $translation) {
             $type = (string) ($translation->type ?? '');
             $slug = (string) ($translation->slug ?? 'default');
             $language = (string) ($translation->language ?? '');
+            $translation_candidates[] = ['component_id'=>self::text($type . ':' . $slug . ':' . $language, 150), 'translation_type'=>$type, 'slug'=>self::text($slug, 80), 'language'=>self::text($language, 40), 'package_version'=>self::text($translation->version ?? '', 40), 'updated'=>self::text($translation->updated ?? '', 40)];
             // A translation package date/version is not a plugin or core version.
             $updates[] = ['slug' => self::text($type . ':' . $slug . ':' . $language, 150), 'name' => self::text(ucfirst($type) . ' translation: ' . $slug . ' (' . $language . ')'), 'type' => 'translation', 'current_version' => '', 'target_version' => self::text($translation->version ?? '', 40)];
         }
@@ -104,6 +114,8 @@ final class PICTS_Inventory {
         return [
             'components' => $components, 'updates' => $updates,
             'summary' => [
+                'protocol_version' => 3, 'database_version' => (int) get_option('db_version'), 'active_template' => get_template() ?: null,
+                'core_candidates' => $core_candidates, 'translation_candidates' => $translation_candidates,
                 'component_count' => count($components), 'update_count' => count($updates), 'locale' => self::text(get_locale(), 40),
                 'multisite' => is_multisite(), 'scope' => 'current_site', 'active_theme' => get_stylesheet() ?: null,
                 'core_auto_update_constant' => $core_auto,

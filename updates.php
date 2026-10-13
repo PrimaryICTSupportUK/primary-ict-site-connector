@@ -1,5 +1,6 @@
 <?php
 if (!defined('ABSPATH')) { exit; }
+require_once __DIR__ . '/native-source.php';
 
 /** A single exact plugin target. Package locations stay inside WordPress. */
 final class PICTS_Plugin_Update {
@@ -10,6 +11,8 @@ final class PICTS_Plugin_Update {
             && preg_match('/^[A-Za-z0-9_-]+\/[A-Za-z0-9_.-]+\.php$/D', $target['plugin_id'])
             && !str_contains($target['plugin_id'], '..')
             && $target['plugin_id'] !== 'primary-ict-site-connector/primary-ict-site-connector.php'
+            && !(isset($target['source']) && isset($target['native_source']))
+            && (!isset($target['native_source']) || (is_array($target['native_source']) && PICTS_Native_Source::valid($target['native_source'])))
             && (!isset($target['source']) || (is_array($target['source']) && PICTS_GitHub_Source::valid($target['source'], $target['plugin_id'], (string) ($target['to_version'] ?? ''))))
             && is_string($target['from_version'] ?? null) && strlen($target['from_version']) > 0 && strlen($target['from_version']) <= 80
             && is_string($target['to_version'] ?? null) && strlen($target['to_version']) > 0 && strlen($target['to_version']) <= 80
@@ -40,6 +43,8 @@ final class PICTS_Plugin_Update {
             if ($uri !== 'https://github.com/' . $target['source']['repository']) { return 'unsupported_site'; }
             if (!PICTS_GitHub_Source::resolve($target)) { return 'provider_check_failed'; }
             if (($candidate->package ?? '') !== PICTS_GitHub_Source::package($target['source'])) { return 'candidate_changed'; }
+        } elseif (isset($target['native_source'])) {
+            if (!PICTS_Native_Source::allows((string) ($candidate->package ?? ''), $target['native_source'])) { return 'unsupported_site'; }
         } else {
         if ($uri !== '' && wp_parse_url($uri, PHP_URL_HOST) !== 'wordpress.org') { return 'unsupported_site'; }
         $package = wp_parse_url((string) ($candidate->package ?? ''));
@@ -60,6 +65,7 @@ final class PICTS_Plugin_Update {
         if (!WP_Upgrader::create_lock('auto_updater')) { self::stop($pending, 'updater_busy'); return; }
         $target = $pending['job']['target'];
         $download = isset($target['source']) ? static fn ($reply, $package, $upgrader, $extra) => PICTS_GitHub_Source::download($reply, $package, $extra, $target) : null;
+        if (isset($target['native_source'])) { $download = static fn ($reply, $package, $upgrader, $extra) => PICTS_Native_Source::download($reply, $package, $extra, $target); }
         if ($download) { add_filter('upgrader_pre_download', $download, PHP_INT_MAX, 4); }
         $translations = ['Language_Pack_Upgrader', 'async_upgrade'];
         $priority = has_action('upgrader_process_complete', $translations);

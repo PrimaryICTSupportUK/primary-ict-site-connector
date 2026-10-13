@@ -1,12 +1,13 @@
 <?php
 if (!defined('ABSPATH')) { exit; }
+require_once __DIR__ . '/components.php';
 
-/** Fixed-purpose checks and single-plugin updates. No remote callbacks or package URLs. */
+/** Fixed-purpose checks and exact component updates. No remote callbacks or package URLs. */
 final class PICTS_Check_Jobs {
     private const HOOK = 'picts_connector_poll';
     private const RESUME = 'picts_connector_job_resume';
     private const PENDING = 'picts_connector_pending_job';
-    private const VERSION = '0.5.1';
+    private const VERSION = '0.6.0';
     public static function init(): void {
         add_filter('cron_schedules', [self::class, 'schedule']);
         add_action('init', [self::class, 'ensure_schedule']);
@@ -27,7 +28,7 @@ final class PICTS_Check_Jobs {
     // add_option is atomic. Remove an expired lock only if its stored value still matches.
     public static function with_lock(string $name, callable $callback): bool {
         $pending = (array) get_option(self::PENDING, []);
-        $lock_seconds = $name === 'job' && ($pending['job']['action'] ?? '') === 'update_plugin' ? 600 : 180;
+        $lock_seconds = $name === 'job' && str_starts_with(($pending['job']['action'] ?? ''), 'update_') ? 900 : 180;
         $name = 'picts_connector_lock_' . $name;
         $value = (string) time();
         if (!add_option($name, $value, '', false)) {
@@ -92,11 +93,13 @@ final class PICTS_Check_Jobs {
                 $job = $response['data']['job'] ?? null;
                 if (!$job) { return; }
                 $lease = $response['data']['lease_token'] ?? '';
-                if (!in_array($job['action'] ?? '', ['collect_inventory','check_updates','update_plugin'], true) || !preg_match('/^[0-9a-f-]{36}$/i', $job['id'] ?? '') || !preg_match('/^picts_lease_[A-Za-z0-9_-]{43}$/', $lease) || !in_array($job['stage'] ?? '', ['core','diagnostics','preflight'], true)) { return; }
+                if (!in_array($job['action'] ?? '', ['collect_inventory','check_updates','update_plugin','update_theme','update_core','update_translation'], true) || !preg_match('/^[0-9a-f-]{36}$/i', $job['id'] ?? '') || !preg_match('/^picts_lease_[A-Za-z0-9_-]{43}$/', $lease) || !in_array($job['stage'] ?? '', ['core','diagnostics','preflight'], true)) { return; }
                 $pending = ['job' => $job, 'lease' => $lease, 'stage' => $job['stage'], 'report' => ['schema_version' => 1, 'snapshot_id' => null, 'checks' => [], 'diagnostics' => null, 'failure' => null]];
-                if ($job['action'] === 'update_plugin') {
-                    if (!PICTS_Plugin_Update::valid_target((array) ($job['target'] ?? []))) { return; }
-                    $pending['report']['update'] = PICTS_Plugin_Update::initial($job['target']);
+                if (str_starts_with($job['action'], 'update_')) {
+                    $executor = $job['action'] === 'update_plugin' ? PICTS_Plugin_Update::class : PICTS_Component_Update::class;
+                    if ($job['action'] !== 'update_plugin' && $job['action'] !== 'update_' . ($job['target']['kind'] ?? '')) { return; }
+                    if (!$executor::valid_target((array) ($job['target'] ?? []))) { return; }
+                    $pending['report']['update'] = $executor::initial($job['target']);
                 }
                 update_option(self::PENDING, $pending, false);
             }
@@ -107,18 +110,20 @@ final class PICTS_Check_Jobs {
             self::restore_interrupted($pending);
             try {
                 $stage = $pending['stage'];
+                $executor = $pending['job']['action'] === 'update_plugin' ? PICTS_Plugin_Update::class : PICTS_Component_Update::class;
                 if ($stage === 'preflight') {
                     $check = isset($pending['job']['target']['source'])
                         ? ['category' => 'plugin', 'status' => PICTS_GitHub_Source::resolve($pending['job']['target']) ? 'success' : 'failed', 'reason' => 'response_received', 'checked_at' => gmdate('Y-m-d\TH:i:s\Z'), 'provider' => 'github']
-                        : self::check('plugin', $pending);
+                        : self::check($pending['job']['target']['translation_type'] ?? ($pending['job']['target']['kind'] ?? 'plugin'), $pending);
+                    if (isset($pending['job']['target']['native_source'])) { $check['provider'] = 'native_vendor'; }
                     if ($check['status'] !== 'success') { $check['reason'] = 'provider_error'; }
                     $pending['report']['checks'][] = $check;
-                    $reason = $check['status'] === 'success' ? PICTS_Plugin_Update::guard($pending['job']['target']) : 'provider_check_failed';
+                    $reason = $check['status'] === 'success' ? $executor::guard($pending['job']['target']) : 'provider_check_failed';
                     if ($reason) { PICTS_Plugin_Update::stop($pending, $reason); } else { $pending['stage'] = 'execute'; }
                 } elseif ($stage === 'execute') {
-                    PICTS_Plugin_Update::execute($pending, static fn (array $body): array => self::request($body));
+                    $executor::execute($pending, static fn (array $body): array => self::request($body));
                 } elseif ($stage === 'verify') {
-                    PICTS_Plugin_Update::verify($pending);
+                    $executor::verify($pending);
                 } elseif (in_array($stage, ['core','plugin','theme'], true)) {
                     $pending['report']['checks'][] = self::check($stage, $pending);
                     $pending['stage'] = ['core' => 'plugin', 'plugin' => 'theme', 'theme' => 'diagnostics'][$stage];
@@ -135,7 +140,7 @@ final class PICTS_Check_Jobs {
                         if (array_filter($pending['report']['checks'], static fn ($check) => $check['status'] !== 'success')) { $pending['report']['failure'] = $pending['report']['failure'] ?? 'provider_check_failed'; }
                     } elseif (empty(get_option('picts_connector_pending_inventory'))) { $pending['report']['failure'] = 'inventory_failed'; $pending['stage'] = 'finished'; }
                 }
-            } catch (Throwable $error) { self::restore_interrupted($pending); if ($pending['job']['action'] === 'update_plugin') { PICTS_Plugin_Update::stop($pending, 'worker_error', !empty($pending['grant_attempted']) ? 'uncertain' : 'failed'); } else { $pending['report']['failure'] = 'worker_error'; $pending['stage'] = 'finished'; } }
+            } catch (Throwable $error) { self::restore_interrupted($pending); if (str_starts_with($pending['job']['action'], 'update_')) { PICTS_Plugin_Update::stop($pending, 'worker_error', !empty($pending['grant_attempted']) ? 'uncertain' : 'failed'); } else { $pending['report']['failure'] = 'worker_error'; $pending['stage'] = 'finished'; } }
             update_option(self::PENDING, $pending, false);
             if ($pending['stage'] === 'finished') {
                 $done = self::report($pending, $pending['report']['failure'] ? 'failed' : 'completed');
@@ -188,7 +193,7 @@ final class PICTS_Check_Jobs {
     }
     public static function admin_status(): void {
         $last = (array) get_option('picts_connector_last_poll', []);
-        echo '<h2>Dashboard jobs</h2><p>This site runs inventory/check jobs and individually authorised plugin-update jobs. Updates run in WordPress cron and preserve activation. Review the saved dashboard report.</p>';
+        echo '<h2>Dashboard jobs</h2><p>This site runs inventory/check jobs and individually authorised component-update jobs. Updates run in WordPress cron and preserve activation. Review the saved dashboard report.</p>';
         if (!empty($last['at'])) { echo '<p>Last service poll: ' . esc_html(wp_date('j M Y, H:i', $last['at'])) . ' — ' . (!empty($last['success']) ? 'accepted' : 'failed') . '. Source: ' . (!empty($last['cron']) ? 'WordPress cron' : 'manual') . '.</p>'; }
         $pending = (array) get_option(self::PENDING, []);
         if ($pending) { echo '<p>Current phase: ' . esc_html($pending['stage'] ?? 'unknown') . '. Each poll runs one phase.</p>'; }
