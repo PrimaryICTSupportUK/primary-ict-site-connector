@@ -8,7 +8,7 @@ final class PICTS_Check_Jobs {
     private const HOOK = 'picts_connector_poll';
     private const RESUME = 'picts_connector_job_resume';
     private const PENDING = 'picts_connector_pending_job';
-    private const VERSION = '0.7.0';
+    private const VERSION = '0.7.1';
     public static function init(): void {
         add_filter('cron_schedules', [self::class, 'schedule']);
         add_action('init', [self::class, 'ensure_schedule']);

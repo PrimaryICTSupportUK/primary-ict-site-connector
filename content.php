@@ -22,7 +22,7 @@ final class PICTS_Content_Jobs {
         $r = wp_safe_remote_post($s['service_url'] . '/api/plugin/content', [
             'timeout' => 25, 'redirection' => 0, 'sslverify' => true,
             'headers' => ['Content-Type' => 'application/json', 'Authorization' => 'Bearer ' . $s['token']],
-            'body' => wp_json_encode(array_merge(['site_id' => $s['site_id'], 'plugin_version' => '0.7.0'], $body)),
+            'body' => wp_json_encode(array_merge(['site_id' => $s['site_id'], 'plugin_version' => '0.7.1'], $body)),
             'limit_response_size' => 3100000,
         ]);
         return is_wp_error($r) ? ['code' => 0, 'data' => []] : ['code' => wp_remote_retrieve_response_code($r), 'data' => (array) json_decode(wp_remote_retrieve_body($r), true)];
@@ -98,6 +98,7 @@ final class PICTS_Content_Jobs {
                 $p['result'] = self::read($p['job']); $p['status'] = 'completed'; $p['stage'] = 'finished';
             } else {
                 self::validate($p['job']);
+                if ($p['job']['action'] !== 'upload_image') { self::require_transactions(); }
                 // Persist intent before asking for a single-use service write grant.
                 $p['write_attempted'] = true; self::persist($p);
                 self::receipt($id, ['status' => 'writing', 'fingerprint' => $p['job']['fingerprint']]);
@@ -144,7 +145,7 @@ final class PICTS_Content_Jobs {
             foreach (get_users(['number' => 100, 'orderby' => 'ID', 'fields' => ['ID','display_name']]) as $user) {
                 if (user_can($user->ID,'edit_posts') || user_can($user->ID,'edit_pages')) { $authors[] = ['id' => (int) $user->ID, 'name' => self::short($user->display_name,150)]; }
             }
-            $result = ['authors' => $authors, 'metadata_has_more' => count($authors) >= 100];
+            $result = ['authors' => $authors, 'metadata_has_more' => count($authors) >= 100, 'database_tables' => self::database_tables()];
             foreach (['category' => 'categories','post_tag' => 'tags'] as $taxonomy => $key) {
                 $terms = get_terms(['taxonomy' => $taxonomy, 'hide_empty' => false, 'number' => 100]);
                 if (!is_wp_error($terms) && count($terms) >= 100) { $result['metadata_has_more'] = true; }
@@ -189,12 +190,23 @@ final class PICTS_Content_Jobs {
         if ($action === 'create_draft' && (!in_array($p['post_type'] ?? '',['post','page'],true) || !is_string($p['title'] ?? null) || trim($p['title']) === '' || !is_string($p['content'] ?? null))) { throw new RuntimeException('invalid_payload'); }
         if ($action === 'schedule' && (!is_string($p['publish_at'] ?? null) || !strtotime($p['publish_at']) || strtotime($p['publish_at']) > time()+60)) { throw new RuntimeException('invalid_payload'); }
     }
+    private static function database_tables(): array {
+        global $wpdb;
+        $tables = [];
+        foreach (['posts','postmeta','options','term_relationships','term_taxonomy'] as $name) {
+            $engine = strtolower((string) $wpdb->get_var($wpdb->prepare('SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=%s',$wpdb->$name)));
+            $tables[] = ['table' => $name, 'engine' => in_array($engine,['innodb','myisam','aria','memory'],true) ? $engine : ($engine === '' ? 'unavailable' : 'other'), 'transactional' => $engine === 'innodb'];
+        }
+        return $tables;
+    }
+    private static function require_transactions(): void {
+        foreach (self::database_tables() as $table) {
+            if (!$table['transactional']) { throw new RuntimeException('transaction_unavailable'); }
+        }
+    }
     private static function transaction(): void {
         global $wpdb;
-        foreach ([$wpdb->posts,$wpdb->postmeta,$wpdb->options,$wpdb->term_relationships,$wpdb->term_taxonomy] as $table) {
-            $engine = $wpdb->get_var($wpdb->prepare('SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=%s',$table));
-            if (strtolower((string) $engine) !== 'innodb') { throw new RuntimeException('transaction_unavailable'); }
-        }
+        self::require_transactions();
         if ($wpdb->query('START TRANSACTION') === false) { throw new RuntimeException('transaction_unavailable'); }
     }
     private static function write(array $job): array {

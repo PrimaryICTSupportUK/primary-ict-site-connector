@@ -2,7 +2,7 @@
 Contributors: primaryict
 Requires at least: 6.5
 Requires PHP: 8.0
-Stable tag: 0.7.0
+Stable tag: 0.7.1
 License: GPLv2 or later
 
 WordPress inventory and queued diagnostic checks for the Primary ICT Support staff dashboard. Runs individually authorised dashboard component updates.
@@ -32,7 +32,7 @@ Catalogues upload in batches of up to 25 components and 25 update candidates, wi
 PHP configuration limits are not account resource usage. Hosting disk quota is unknown. Ordinary inventory includes cached candidates; explicit dashboard checks invoke WordPress.org core/plugin/theme checks and record success/failure/skipped evidence. Custom providers require explicit administrator approval of the native package host and a local WordPress update candidate; unsupported hosts and redirects are refused. Diagnostics include three selected Site Health checks, not a full audit. Native auto-update selections do not establish effective behaviour under filters. WordPress Multisite is identified, but update jobs require a single site. Exact targets support WordPress.org plugins, themes, core and translation packs, trusted public GitHub plugins, and explicitly approved native vendor plugins. Jobs require an allowed dashboard policy, single-use service permission, compatible versions and direct filesystem access. Installation runs in cron; a later WordPress request verifies the selected version, theme selection, core database version or translation content hashes. Interrupted writes require staff review with fresh inventory. Core major releases require explicit policy opt-in. Package URLs and credentials remain on WordPress. Connector self-update remains with the native GitHub updater. These additions require the compatible 0.6.0 service; older 0.5.1 connectors retain their plugin-only execution protocol.
 
 == Content management ==
-Requires the compatible 0.7.0 service. All content permissions start disabled per site. Staff first allow reading, request author metadata, and select an existing WordPress user. Every read/write checks that user's native WordPress permissions; content works only on single-site installations. Ordinary posts/pages and JPEG/PNG/WebP images are supported. Custom post types, page builder metadata, remote image fetching and permanent deletion are excluded.
+Requires the compatible 0.7.1 service. All content permissions start disabled per site. Staff first allow reading, request author metadata, and select an existing WordPress user. Every read/write checks that user's native WordPress permissions; content works only on single-site installations. Ordinary posts/pages and JPEG/PNG/WebP images are supported. Custom post types, page builder metadata, remote image fetching and permanent deletion are excluded.
 Draft creation/editing and image upload are separate opt-ins. Publishing, scheduled publishing, live edits, trash and restore need the site's publishing permission and normally staff approval. Approval covers an immutable request and its exact saved WordPress version. Scheduled publishing remains a service job: WordPress stays draft until due and permissions are checked again.
 Content bodies are bounded at 64 KiB. List summaries show larger items with an explicit WordPress-editor link. Images are limited to 2 MiB and 16 million pixels. WordPress images normally become public even if the associated post is a draft.
 Writes use a single-use grant, a local receipt and later-request verification. Content and maintenance writes share a lock. Existing edits require the exact content fingerprint and InnoDB transactions. Native WordPress hooks run normally; third-party external side effects cannot be rolled back by the connector. Ambiguous writes are never retried automatically. Staff inspect fresh affected content and record their findings to release a write hold.
@@ -48,7 +48,7 @@ From connector 0.5.1, use Check connector updates now to bypass cached release m
 
 == Changelog ==
 
-= 0.7.0 =
+= 0.7.1 =
 * Adds optional queued posts, pages and image management with separate draft and publishing permissions.
 * Preserves exact approval snapshots, checks concurrent edits and verifies writes on a later request.
 * Adds service-managed scheduling, recoverable trash/restore and staff review for uncertain outcomes.
