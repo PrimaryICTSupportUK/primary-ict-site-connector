@@ -1,6 +1,6 @@
-Connector 0.6.0 adds controlled WordPress core, theme and translation updates, including category-specific verification and retained receipts.
-Approved native supplier packages use the site's WordPress updater with bounded downloads and an administrator-approved package host.
-Saved batch queues follow the dashboard's per-site policy and run one installation per site at a time.
-Existing pairing, inventory, shared Primary ICT Support menu and native GitHub self-updater settings are preserved.
-Requires the compatible component-update dashboard service to be deployed before installing.
-Normal WordPress update controls apply to the connector itself.
+Connector 0.7.0: optional queued WordPress posts, pages and image management.
+Separate site opt-ins control reading, drafts, uploads and publishing. Live changes normally require staff approval of the exact content version.
+Scheduled publishing rechecks permissions at execution time. Interrupted writes require review and are never blindly repeated.
+Pairing, the branded menu, existing maintenance jobs and the native GitHub updater are preserved.
+Requires the compatible content-management service and migrations, deployed before this release.
+All new content permissions start disabled. Ordinary inventory does not start collecting content.
