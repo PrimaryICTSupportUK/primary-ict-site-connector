@@ -1,4 +1,4 @@
-Connector 0.7.1: queued WordPress content management with safe database preflight and table-engine diagnostics.
+Connector 0.7.2: verified image text, reliable featured-image removal and queued WordPress content management.
 Separate site opt-ins control reading, drafts, uploads and publishing. Live changes normally require staff approval of the exact content version.
 Scheduled publishing rechecks permissions at execution time. Interrupted writes require review and are never blindly repeated.
 Pairing, the branded menu, existing maintenance jobs and the native GitHub updater are preserved.

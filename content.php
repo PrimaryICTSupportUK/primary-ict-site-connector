@@ -22,7 +22,7 @@ final class PICTS_Content_Jobs {
         $r = wp_safe_remote_post($s['service_url'] . '/api/plugin/content', [
             'timeout' => 25, 'redirection' => 0, 'sslverify' => true,
             'headers' => ['Content-Type' => 'application/json', 'Authorization' => 'Bearer ' . $s['token']],
-            'body' => wp_json_encode(array_merge(['site_id' => $s['site_id'], 'plugin_version' => '0.7.1'], $body)),
+            'body' => wp_json_encode(array_merge(['site_id' => $s['site_id'], 'plugin_version' => '0.7.2'], $body)),
             'limit_response_size' => 3100000,
         ]);
         return is_wp_error($r) ? ['code' => 0, 'data' => []] : ['code' => wp_remote_retrieve_response_code($r), 'data' => (array) json_decode(wp_remote_retrieve_body($r), true)];
@@ -88,7 +88,7 @@ final class PICTS_Content_Jobs {
                     $result['post'] = $fresh;
                 } elseif (!empty($result['media'][0])) {
                     $media = get_post((int) $result['media'][0]['id']);
-                    if (!$media || $media->post_type !== 'attachment' || !wp_attachment_is_image($media->ID)) { throw new RuntimeException('verification_changed'); }
+                    if (!$media || $media->post_type !== 'attachment' || !wp_attachment_is_image($media->ID) || get_post_meta($media->ID,'_wp_attachment_image_alt',true) !== $result['media'][0]['alt_text'] || (array_key_exists('caption',$result['media'][0]) && $media->post_excerpt !== $result['media'][0]['caption'])) { throw new RuntimeException('verification_changed'); }
                 } else { throw new RuntimeException('verification_failed'); }
                 $p['result'] = $result; $p['status'] = 'completed'; $p['stage'] = 'finished';
                 self::receipt($id, ['status' => 'completed', 'result' => $result]);
@@ -258,7 +258,10 @@ final class PICTS_Content_Jobs {
                 foreach (['category_ids' => 'category','tag_ids' => 'post_tag'] as $key => $taxonomy) {
                     if (array_key_exists($key,$p) && $type === 'post') { $set = wp_set_post_terms($id,$p[$key],$taxonomy,false); if (is_wp_error($set)) { throw new RuntimeException('write_failed'); } }
                 }
-                if (array_key_exists('featured_media_id',$p)) { if ($p['featured_media_id'] === null) { delete_post_thumbnail($id); } elseif (!set_post_thumbnail($id,$p['featured_media_id']) && (int) get_post_thumbnail_id($id) !== $p['featured_media_id']) { throw new RuntimeException('write_failed'); } }
+                if (array_key_exists('featured_media_id',$p)) {
+                    if ($p['featured_media_id'] === null) { delete_post_thumbnail($id); } else { set_post_thumbnail($id,$p['featured_media_id']); }
+                    if ((int) get_post_thumbnail_id($id) !== (int) ($p['featured_media_id'] ?? 0)) { throw new RuntimeException('write_failed'); }
+                }
             }
             update_post_meta($id,'_picts_content_job_id',$job['id']);
             $out = ['post' => self::post($id,true), 'sanitized' => $sanitized];
@@ -277,11 +280,14 @@ final class PICTS_Content_Jobs {
         try {
             $size = wp_getimagesize($tmp); $check = wp_check_filetype_and_ext($tmp,$p['filename']);
             if (!$size || $size[0] < 1 || $size[1] < 1 || $size[0]*$size[1] > 16000000 || wp_get_image_mime($tmp) !== $p['mime_type'] || ($check['type'] ?? '') !== $p['mime_type']) { throw new RuntimeException('invalid_image'); }
-            $id = media_handle_sideload(['name' => sanitize_file_name($p['filename']),'tmp_name' => $tmp],0,null,['post_author' => get_current_user_id(),'post_excerpt' => sanitize_textarea_field($p['caption'] ?? '')]);
+            $alt = sanitize_text_field($p['alt_text'] ?? ''); $caption = sanitize_textarea_field($p['caption'] ?? '');
+            $id = media_handle_sideload(['name' => sanitize_file_name($p['filename']),'tmp_name' => $tmp],0,null,['post_author' => get_current_user_id(),'post_excerpt' => wp_slash($caption)]);
             if (is_wp_error($id)) { throw new RuntimeException('write_failed'); }
             update_post_meta($id,'_picts_content_job_id',$job_id);
-            update_post_meta($id,'_wp_attachment_image_alt',sanitize_text_field($p['alt_text'] ?? ''));
-            return ['media' => [['id' => (int) $id,'title' => get_the_title($id),'url' => set_url_scheme((string) wp_get_attachment_url($id),'https'),'alt_text' => sanitize_text_field($p['alt_text'] ?? '')]]];
+            update_post_meta($id,'_wp_attachment_image_alt',wp_slash($alt));
+            $saved_alt = (string) get_post_meta($id,'_wp_attachment_image_alt',true); $saved_caption = (string) get_post_field('post_excerpt',$id,'raw');
+            if ($saved_alt !== $alt || $saved_caption !== $caption) { throw new RuntimeException('verification_changed'); }
+            return ['media' => [['id' => (int) $id,'title' => get_the_title($id),'url' => set_url_scheme((string) wp_get_attachment_url($id),'https'),'alt_text' => $saved_alt,'caption' => $saved_caption]]];
         } finally { if (file_exists($tmp)) { wp_delete_file($tmp); } }
     }
 }
