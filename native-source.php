@@ -16,9 +16,12 @@ final class PICTS_Native_Source {
         return self::valid($source) && $p && ($p['scheme'] ?? '') === 'https' && in_array($p['host'] ?? '', $source['approved_hosts'], true) && empty($p['user']) && empty($p['pass']) && empty($p['port']) && empty($p['fragment']);
     }
     public static function download($reply, string $package, array $extra, array $target) {
-        if (($extra['plugin'] ?? '') !== $target['plugin_id']) { return $reply; }
-        $cache = get_site_transient('update_plugins');
-        $expected = (string) ($cache->response[$target['plugin_id']]->package ?? '');
+        $theme = ($target['kind'] ?? '') === 'theme';
+        $id = $theme ? $target['theme_id'] : $target['plugin_id'];
+        if (($extra[$theme ? 'theme' : 'plugin'] ?? '') !== $id) { return $reply; }
+        $cache = get_site_transient($theme ? 'update_themes' : 'update_plugins');
+        $candidate = $cache->response[$id] ?? null;
+        $expected = $theme ? (string) (((array) $candidate)['package'] ?? '') : (string) ($candidate->package ?? '');
         if ($reply !== false || $package !== $expected || !self::allows($package, $target['native_source'])) { return new WP_Error('picts_package_changed', 'The approved native package changed.'); }
         // Safe WordPress HTTP rejects private destinations; no redirect may escape the exact approved host.
         $http = static function ($args, $url) use ($package) { if ($url === $package) { $args['redirection']=0; $args['sslverify']=true; $args['reject_unsafe_urls']=true; $args['limit_response_size']=self::MAX_PACKAGE_BYTES + 1; } return $args; };

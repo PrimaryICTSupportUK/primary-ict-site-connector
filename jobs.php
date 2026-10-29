@@ -8,7 +8,7 @@ final class PICTS_Check_Jobs {
     private const HOOK = 'picts_connector_poll';
     private const RESUME = 'picts_connector_job_resume';
     private const PENDING = 'picts_connector_pending_job';
-    private const VERSION = '0.7.2';
+    private const VERSION = '0.8.0';
     public static function init(): void {
         add_filter('cron_schedules', [self::class, 'schedule']);
         add_action('init', [self::class, 'ensure_schedule']);
@@ -116,7 +116,12 @@ final class PICTS_Check_Jobs {
                     $check = isset($pending['job']['target']['source'])
                         ? ['category' => 'plugin', 'status' => PICTS_GitHub_Source::resolve($pending['job']['target']) ? 'success' : 'failed', 'reason' => 'response_received', 'checked_at' => gmdate('Y-m-d\TH:i:s\Z'), 'provider' => 'github']
                         : self::check($pending['job']['target']['translation_type'] ?? ($pending['job']['target']['kind'] ?? 'plugin'), $pending);
-                    if (isset($pending['job']['target']['native_source'])) { $check['provider'] = 'native_vendor'; }
+                    if (isset($pending['job']['target']['native_source'])) {
+                        $check['provider'] = 'native_vendor';
+                        // A WordPress.org response is not proof that a commercial supplier replied.
+                        // For native themes, report the refreshed, locally verified candidate honestly.
+                        if (($pending['job']['target']['kind'] ?? '') === 'theme' && $check['status'] === 'success') { $check['reason'] = 'native_candidate_verified'; }
+                    }
                     if ($check['status'] !== 'success') { $check['reason'] = 'provider_error'; }
                     $pending['report']['checks'][] = $check;
                     $reason = $check['status'] === 'success' ? $executor::guard($pending['job']['target']) : 'provider_check_failed';

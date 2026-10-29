@@ -78,6 +78,9 @@ final class PICTS_Inventory {
             $data = [];
             foreach (['Name', 'Version', 'Author', 'Description', 'ThemeURI', 'RequiresWP', 'RequiresPHP', 'UpdateURI'] as $key) { $data[$key] = $theme->get($key); }
             $component = self::component('theme', $slug, $data, (array) ($theme_responses[$slug] ?? []), $theme_no_updates, $theme_auto);
+            $package = wp_parse_url((string) ($theme_responses[$slug]['package'] ?? ''));
+            $host = strtolower((string) ($package['host'] ?? ''));
+            $component['native_package_host'] = $component['provider'] === 'custom' && ($package['scheme'] ?? '') === 'https' && empty($package['user']) && empty($package['pass']) && empty($package['port']) && empty($package['fragment']) && preg_match('/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/D',$host) ? $host : null;
             $component['active'] = get_stylesheet() === $slug;
             $parent = (string) $theme->get('Template');
             $component['parent'] = $parent !== '' ? $parent : null;

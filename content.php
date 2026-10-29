@@ -22,7 +22,7 @@ final class PICTS_Content_Jobs {
         $r = wp_safe_remote_post($s['service_url'] . '/api/plugin/content', [
             'timeout' => 25, 'redirection' => 0, 'sslverify' => true,
             'headers' => ['Content-Type' => 'application/json', 'Authorization' => 'Bearer ' . $s['token']],
-            'body' => wp_json_encode(array_merge(['site_id' => $s['site_id'], 'plugin_version' => '0.7.2'], $body)),
+            'body' => wp_json_encode(array_merge(['site_id' => $s['site_id'], 'plugin_version' => '0.8.0'], $body)),
             'limit_response_size' => 3100000,
         ]);
         return is_wp_error($r) ? ['code' => 0, 'data' => []] : ['code' => wp_remote_retrieve_response_code($r), 'data' => (array) json_decode(wp_remote_retrieve_body($r), true)];
