@@ -9,6 +9,7 @@ final class PICTS_Component_Update {
     public static function valid_target(array $t): bool {
         if (!in_array($t['kind'] ?? '', ['theme','core','translation'], true) || !self::token($t['from_version'] ?? null) || !self::token($t['to_version'] ?? null) || isset($t['package']) || isset($t['source'])) { return false; }
         if ($t['kind'] !== 'translation' && !version_compare($t['to_version'], $t['from_version'], '>')) { return false; }
+        if (isset($t['native_source']) && ($t['kind'] !== 'theme' || !PICTS_Native_Source::valid((array) $t['native_source']) || !array_key_exists('theme_parent', $t) || ($t['theme_parent'] !== null && !self::token($t['theme_parent'])))) { return false; }
         if ($t['kind'] === 'theme') { return self::token($t['theme_id'] ?? null) && ($t['component_id'] ?? null) === $t['theme_id'] && self::token($t['stylesheet'] ?? null) && self::token($t['template'] ?? null) && is_bool($t['active'] ?? null) && $t['active'] === ($t['theme_id'] === $t['stylesheet']); }
         if ($t['kind'] === 'core') { return ($t['component_id'] ?? '') === 'wordpress' && self::token($t['locale'] ?? null) && is_bool($t['allow_major'] ?? null) && (bool) preg_match('/^\d+\.\d+(?:\.\d+)?$/D', $t['to_version']); }
         return in_array($t['translation_type'] ?? '', ['core','plugin','theme'], true) && self::token($t['slug'] ?? null) && self::token($t['language'] ?? null) && self::token($t['package_version'] ?? null) && $t['to_version'] === $t['package_version'] && is_string($t['updated'] ?? null) && (bool) preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/D', $t['updated']) && ($t['component_id'] ?? '') === $t['translation_type'] . ':' . $t['slug'] . ':' . $t['language'];
@@ -51,7 +52,10 @@ final class PICTS_Component_Update {
             wp_clean_themes_cache(false); $theme = wp_get_theme($t['theme_id']); $root = get_theme_root($t['theme_id']);
             if (!$theme->exists() || $theme->errors() || $theme->get('Version') !== $t['from_version'] || (string) ($c->new_version ?? '') !== $t['to_version'] || get_stylesheet() !== $t['stylesheet'] || get_template() !== $t['template']) { return 'candidate_changed'; }
             $uri = (string) $theme->get('UpdateURI');
-            if (($uri !== '' && wp_parse_url($uri, PHP_URL_HOST) !== 'wordpress.org') || !self::official_package((string) ($c->package ?? ''), '/theme/' . $t['theme_id'] . '.' . $t['to_version'] . '.zip')) { return 'unsupported_site'; }
+            if (isset($t['native_source'])) {
+                if (((string) $theme->get('Template') ?: null) !== $t['theme_parent']) { return 'candidate_changed'; }
+                if (!PICTS_Native_Source::allows((string) ($c->package ?? ''), $t['native_source'])) { return 'unsupported_site'; }
+            } elseif (($uri !== '' && wp_parse_url($uri, PHP_URL_HOST) !== 'wordpress.org') || !self::official_package((string) ($c->package ?? ''), '/theme/' . $t['theme_id'] . '.' . $t['to_version'] . '.zip')) { return 'unsupported_site'; }
             if (!is_wp_version_compatible((string) ($c->requires ?? '')) || !is_php_version_compatible((string) ($c->requires_php ?? ''))) { return 'incompatible'; }
         } elseif ($t['kind'] === 'core') {
             if (get_bloginfo('version') !== $t['from_version']) { return 'candidate_changed'; }
@@ -77,7 +81,7 @@ final class PICTS_Component_Update {
         if (!WP_Upgrader::create_lock('auto_updater')) { self::stop($p, 'updater_busy'); return; }
         $translations = ['Language_Pack_Upgrader','async_upgrade']; $priority = has_action('upgrader_process_complete', $translations);
         if ($priority !== false) { remove_action('upgrader_process_complete', $translations, $priority); }
-        $http = null;
+        $http = null; $native_download = null;
         try {
             $p['grant_attempted'] = true;
             if (!update_option('picts_connector_pending_job', $p, false)) { self::stop($p, 'worker_error'); return; }
@@ -91,6 +95,10 @@ final class PICTS_Component_Update {
             $packages = $t['kind'] === 'core' ? array_values((array) $c->packages) : [$c->package];
             $http = static function ($args, $url) use ($packages) { if (in_array($url, $packages, true)) { $args['redirection']=0; $args['sslverify']=true; $args['reject_unsafe_urls']=true; } return $args; };
             add_filter('http_request_args', $http, PHP_INT_MAX, 2);
+            if (isset($t['native_source'])) {
+                $native_download = static fn ($reply,$package,$upgrader,$extra) => PICTS_Native_Source::download($reply,$package,(array) $extra,$t);
+                add_filter('upgrader_pre_download',$native_download,PHP_INT_MAX,4);
+            }
             $skin = new Automatic_Upgrader_Skin();
             if ($t['kind'] === 'theme') { $result = (new Theme_Upgrader($skin))->upgrade($t['theme_id'], ['clear_update_cache'=>true]); $ok = $result === true; }
             elseif ($t['kind'] === 'core') { $result = (new Core_Upgrader($skin))->upgrade($c, ['attempt_rollback'=>false]); $ok = is_string($result) && $result === $t['to_version']; }
@@ -106,6 +114,7 @@ final class PICTS_Component_Update {
             // If this persistence is interrupted, the earlier grant_attempted marker refuses another install.
             if (!update_option('picts_connector_pending_job', $p, false)) { self::stop($p, 'interrupted', 'uncertain'); }
         } finally {
+            if ($native_download) { remove_filter('upgrader_pre_download',$native_download,PHP_INT_MAX); }
             if ($http) { remove_filter('http_request_args', $http, PHP_INT_MAX); }
             if ($priority !== false) { add_action('upgrader_process_complete', $translations, $priority, 2); }
             WP_Upgrader::release_lock('auto_updater');
