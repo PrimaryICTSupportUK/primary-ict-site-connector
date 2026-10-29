@@ -1,13 +1,14 @@
 <?php
 if (!defined('ABSPATH')) { exit; }
 require_once __DIR__ . '/components.php';
+require_once __DIR__ . '/content.php';
 
 /** Fixed-purpose checks and exact component updates. No remote callbacks or package URLs. */
 final class PICTS_Check_Jobs {
     private const HOOK = 'picts_connector_poll';
     private const RESUME = 'picts_connector_job_resume';
     private const PENDING = 'picts_connector_pending_job';
-    private const VERSION = '0.6.0';
+    private const VERSION = '0.7.2';
     public static function init(): void {
         add_filter('cron_schedules', [self::class, 'schedule']);
         add_action('init', [self::class, 'ensure_schedule']);
@@ -27,8 +28,7 @@ final class PICTS_Check_Jobs {
     }
     // add_option is atomic. Remove an expired lock only if its stored value still matches.
     public static function with_lock(string $name, callable $callback): bool {
-        $pending = (array) get_option(self::PENDING, []);
-        $lock_seconds = $name === 'job' && str_starts_with(($pending['job']['action'] ?? ''), 'update_') ? 900 : 180;
+        $lock_seconds = $name === 'job' ? 900 : 180;
         $name = 'picts_connector_lock_' . $name;
         $value = (string) time();
         if (!add_option($name, $value, '', false)) {
@@ -85,6 +85,7 @@ final class PICTS_Check_Jobs {
         if (empty($settings['token'])) { return; }
         try { self::with_lock('job', static function (): void {
             $pending = (array) get_option(self::PENDING, []);
+            if (!$pending && PICTS_Content_Jobs::tick()) { return; }
             if (!$pending) {
                 $response = self::request(['operation' => 'poll', 'cron_context' => wp_doing_cron()]);
                 update_option('picts_connector_last_poll', ['at' => time(), 'success' => $response['code'] === 200, 'cron' => wp_doing_cron()], false);
@@ -147,8 +148,8 @@ final class PICTS_Check_Jobs {
                 if ($done['code'] === 200 || in_array($done['code'], [401,409], true)) { delete_option(self::PENDING); }
             } else { self::report($pending, 'running'); }
         }); } finally {
-            if (get_option(self::PENDING) && !wp_next_scheduled(self::RESUME)) { wp_schedule_single_event(time() + MINUTE_IN_SECONDS, self::RESUME); }
-            elseif (!get_option(self::PENDING)) { wp_clear_scheduled_hook(self::RESUME); }
+            if ((get_option(self::PENDING) || get_option('picts_connector_content_pending')) && !wp_next_scheduled(self::RESUME)) { wp_schedule_single_event(time() + MINUTE_IN_SECONDS, self::RESUME); }
+            elseif (!get_option(self::PENDING) && !get_option('picts_connector_content_pending')) { wp_clear_scheduled_hook(self::RESUME); }
         }
     }
     private static function check(string $category, array &$pending): array {

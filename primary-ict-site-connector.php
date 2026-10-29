@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Primary ICT Support Site Connector
  * Description: Pairs this site with the Primary ICT Support dashboard and collects WordPress/PHP inventory and runs authorised component updates.
- * Version: 0.6.0
+ * Version: 0.7.2
  * Author: Primary ICT Support
  * Requires at least: 6.5
  * Requires PHP: 8.0
@@ -21,7 +21,7 @@ final class PICTS_Site_Connector {
     private const OPTION = 'picts_connector_settings';
     private const HOOK = 'picts_connector_inventory';
     private const RESUME_HOOK = 'picts_connector_inventory_resume';
-    private const VERSION = '0.6.0';
+    private const VERSION = '0.7.2';
     private static ?Primary_ICT_Support_GitHub_Updater_V2 $updater = null;
 
     public static function init(): void {
