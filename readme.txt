@@ -2,7 +2,7 @@
 Contributors: primaryict
 Requires at least: 6.5
 Requires PHP: 8.0
-Stable tag: 0.8.0
+Stable tag: 0.8.1
 License: GPLv2 or later
 
 WordPress inventory and queued diagnostic checks for the Primary ICT Support staff dashboard. Runs individually authorised dashboard component updates.
@@ -36,6 +36,8 @@ Requires the compatible dashboard service deployed before this connector release
 Draft creation/editing and image upload are separate opt-ins. Publishing, scheduled publishing, live edits, trash and restore need the site's publishing permission and normally staff approval. Approval covers an immutable request and its exact saved WordPress version. Scheduled publishing remains a service job: WordPress stays draft until due and permissions are checked again.
 Content bodies are bounded at 64 KiB. List summaries show larger items with an explicit WordPress-editor link. Images are limited to 2 MiB and 16 million pixels. WordPress images normally become public even if the associated post is a draft.
 Writes use a single-use grant, a local receipt and later-request verification. Content and maintenance writes share a lock. Existing edits require the exact content fingerprint and InnoDB transactions. Native WordPress hooks run normally; third-party external side effects cannot be rolled back by the connector. Ambiguous writes are never retried automatically. Staff inspect fresh affected content and record their findings to release a write hold.
+
+An administrator can explicitly prepare the five required tables from the connector settings page after confirming a restorable database backup. Only MyISAM tables are converted. The WordPress database account must have ALTER permission, InnoDB must be available, PHP must support mysqli and atomic hard links in the WordPress root, and database advisory locks must be connection-affine. An existing .maintenance file is never overwritten. A progress count records verified tables, not percentage within a table. Maintenance mode affects ordinary WordPress requests; caches, already running requests and other applications can bypass it. On interruption, check the operation before retrying. A timed-out database change may have completed; tables are converted individually and cannot be rolled back as one transaction. If the connector page is unavailable, ask the host to verify no conversion is still running and help remove the connector-owned .maintenance file. Multisite remains unsupported. The backup acknowledgement does not verify a backup.
 The connector runs outbound HTTPS only; no WordPress password or new inbound endpoint is needed. Server history is retained for at least six months. Uploaded base64 image bodies are removed from settled job payloads.
 
 == Uninstallation ==
@@ -47,6 +49,11 @@ The native WordPress updater uses public releases from PrimaryICTSupportUK/prima
 From connector 0.5.1, use Check connector updates now to bypass cached release metadata. Repeated clicks are limited to one check per minute. Last/next check times and provider failures are visible.
 
 == Changelog ==
+
+= 0.8.1 =
+* Adds administrator-started database preparation with a backup acknowledgement, maintenance mode, table progress and interrupted-operation review.
+* Pauses other controls on the preparation page while work is underway.
+* Requires the compatible dashboard service before installation.
 
 = 0.8.0 =
 Guided setup with a single connection-details block, clear expiry recovery and a safe link back to the dashboard. Requires the compatible service release.

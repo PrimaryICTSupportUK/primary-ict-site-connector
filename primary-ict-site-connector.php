@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Primary ICT Support Site Connector
  * Description: Pairs this site with the Primary ICT Support dashboard and collects WordPress/PHP inventory and runs authorised component updates.
- * Version: 0.8.0
+ * Version: 0.8.1
  * Author: Primary ICT Support
  * Requires at least: 6.5
  * Requires PHP: 8.0
@@ -15,6 +15,7 @@ require_once __DIR__ . '/includes/class-primary-ict-support-admin-menu.php';
 require_once __DIR__ . '/includes/class-primary-ict-support-github-updater.php';
 require_once __DIR__ . '/github.php';
 require_once __DIR__ . '/setup.php';
+require_once __DIR__ . '/database-preparation.php';
 require_once __DIR__ . '/updates.php';
 require_once __DIR__ . '/jobs.php';
 
@@ -22,10 +23,11 @@ final class PICTS_Site_Connector {
     private const OPTION = 'picts_connector_settings';
     private const HOOK = 'picts_connector_inventory';
     private const RESUME_HOOK = 'picts_connector_inventory_resume';
-    private const VERSION = '0.8.0';
+    private const VERSION = '0.8.1';
     private static ?Primary_ICT_Support_GitHub_Updater_V2 $updater = null;
 
     public static function init(): void {
+        PICTS_Database_Preparation::init();
         add_filter('cron_schedules', [self::class, 'cron_schedule']);
         add_action('admin_menu', function (): void {
             Primary_ICT_Support_Admin_Menu::register_plugin([
@@ -248,6 +250,7 @@ final class PICTS_Site_Connector {
             wp_nonce_field('picts_inventory'); submit_button('Send inventory now', 'secondary'); echo '</form>';
         }
         if (!empty($settings['token'])) { PICTS_Check_Jobs::admin_status(); }
+        PICTS_Database_Preparation::admin_section();
         echo '<h2>' . (!empty($settings['token']) ? 'Reconnect this website' : 'Connect this website') . '</h2><p>In the Web Dashboard, choose Add website. Copy its connection details, paste them below and connect. Then return to the dashboard to choose the services you want.</p><p>The Site Connector manages this website. Primary ICT Login is a separate sign-in service.</p>';
         echo '<form action="' . esc_url(admin_url('admin-post.php')) . '" method="post"><input type="hidden" name="action" value="picts_pair">';
         wp_nonce_field('picts_pair', '_wpnonce_details');
