@@ -2,7 +2,7 @@
 Contributors: primaryict
 Requires at least: 6.5
 Requires PHP: 8.0
-Stable tag: 0.8.1
+Stable tag: 0.8.2
 License: GPLv2 or later
 
 WordPress inventory and queued diagnostic checks for the Primary ICT Support staff dashboard. Runs individually authorised dashboard component updates.
@@ -49,6 +49,9 @@ The native WordPress updater uses public releases from PrimaryICTSupportUK/prima
 From connector 0.5.1, use Check connector updates now to bypass cached release metadata. Repeated clicks are limited to one check per minute. Last/next check times and provider failures are visible.
 
 == Changelog ==
+
+= 0.8.2 =
+* Recognise WordPress.org directory update identifiers.
 
 = 0.8.1 =
 * Adds administrator-started database preparation with a backup acknowledgement, maintenance mode, table progress and interrupted-operation review.
