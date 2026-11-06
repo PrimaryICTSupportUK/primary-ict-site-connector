@@ -4,13 +4,15 @@ require_once __DIR__ . '/native-source.php';
 
 /** A single exact plugin target. Package locations stay inside WordPress. */
 final class PICTS_Plugin_Update {
+    private const CONNECTOR = 'primary-ict-site-connector/primary-ict-site-connector.php';
+    private const CONNECTOR_REPOSITORY = 'PrimaryICTSupportUK/primary-ict-site-connector';
     private static ?string $request_id = null;
     private static function request_id(): string { return self::$request_id ??= bin2hex(random_bytes(16)); }
     public static function valid_target(array $target): bool {
         return is_string($target['plugin_id'] ?? null)
             && preg_match('/^[A-Za-z0-9_-]+\/[A-Za-z0-9_.-]+\.php$/D', $target['plugin_id'])
             && !str_contains($target['plugin_id'], '..')
-            && $target['plugin_id'] !== 'primary-ict-site-connector/primary-ict-site-connector.php'
+            && ($target['plugin_id'] !== self::CONNECTOR || (($target['active'] ?? null) === true && ($target['source']['repository'] ?? null) === self::CONNECTOR_REPOSITORY))
             && !(isset($target['source']) && isset($target['native_source']))
             && (!isset($target['native_source']) || (is_array($target['native_source']) && PICTS_Native_Source::valid($target['native_source'])))
             && (!isset($target['source']) || (is_array($target['source']) && PICTS_GitHub_Source::valid($target['source'], $target['plugin_id'], (string) ($target['to_version'] ?? ''))))
@@ -81,6 +83,14 @@ final class PICTS_Plugin_Update {
             // Recheck local state immediately after permission, before invoking the supported upgrader.
             $reason = self::guard($pending['job']['target']);
             if ($reason) { self::stop($pending, $reason); return; }
+            if ($target['plugin_id'] === self::CONNECTOR) {
+                // If this process stops while replacing its own files, the next
+                // request verifies the installed version without installing again.
+                $pending['executed_request'] = self::request_id();
+                $pending['self_update_started'] = true;
+                $pending['stage'] = 'verify';
+                if (!update_option('picts_connector_pending_job', $pending, false)) { self::stop($pending, 'worker_error'); return; }
+            }
             $skin = new Automatic_Upgrader_Skin();
             $upgrader = new Plugin_Upgrader($skin);
             $result = $upgrader->upgrade($pending['job']['target']['plugin_id'], ['clear_update_cache' => true]);
@@ -102,7 +112,7 @@ final class PICTS_Plugin_Update {
         $active = isset($plugins[$id]) ? is_plugin_active($id) : null;
         $pending['report']['update']['observed_version'] = is_string($observed) ? substr($observed, 0, 80) : null;
         $pending['report']['update']['active_after'] = $active;
-        if ($observed !== $target['to_version']) { self::stop($pending, 'version_mismatch', 'failed'); return; }
+        if ($observed !== $target['to_version']) { self::stop($pending, 'version_mismatch', !empty($pending['self_update_started']) ? 'uncertain' : 'failed'); return; }
         if ($active !== $target['active']) { self::stop($pending, 'activation_changed', 'failed'); return; }
         $path = realpath(WP_PLUGIN_DIR . '/' . $id);
         $loaded = !$target['active'] || ($path && in_array($path, array_map('realpath', get_included_files()), true));

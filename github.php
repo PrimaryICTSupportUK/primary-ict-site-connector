@@ -60,7 +60,13 @@ final class PICTS_GitHub_Source {
     }
     public static function download($reply, string $package, array $hook_extra, array $target) {
         if (($hook_extra['plugin'] ?? '') !== $target['plugin_id']) { return $reply; }
-        if ($reply !== false || $package !== self::package($target['source'])) { return new WP_Error('picts_package_changed', 'The selected package was changed or intercepted. Installation stopped.'); }
+        if ($package !== self::package($target['source'])) { return new WP_Error('picts_package_changed', 'The selected package was changed or intercepted. Installation stopped.'); }
+        // The connector's normal WordPress updater has already downloaded its
+        // own release. Independently verify those exact bytes and contents.
+        if ($reply !== false) {
+            if (($target['plugin_id'] ?? '') === 'primary-ict-site-connector/primary-ict-site-connector.php' && is_string($reply) && is_file($reply) && hash_equals($target['source']['sha256'], (string) hash_file('sha256', $reply)) && self::inspect($reply, $target)) { return $reply; }
+            return new WP_Error('picts_package_changed', 'The selected package was changed or intercepted. Installation stopped.');
+        }
         require_once ABSPATH . 'wp-admin/includes/file.php';
         $file = download_url($package, 60);
         if (is_wp_error($file)) { return $file; }

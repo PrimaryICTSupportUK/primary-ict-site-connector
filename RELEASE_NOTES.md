@@ -1,1 +1,4 @@
-Site Connector 0.8.2 includes the guided, administrator-started database preparation introduced in 0.8.1 and improves recognition of WordPress.org plugin update sources. Database preparation never starts automatically. Before starting, confirm a restorable database backup and that no other updates are running. WordPress maintenance mode does not block already-running requests or every external system. Existing pairing and permissions are preserved. This version requires a compatible dashboard and database migration.
+Connector 0.8.3 adds verified connector self-updates through the dashboard.
+Self-updates use the official release, preserve pairing and verify the installed version in a later WordPress request.
+An interrupted installation is reviewed rather than repeated blindly. Existing older connectors need a one-time WordPress update before they can use this feature.
+The compatible dashboard and service must be deployed before installing this version. Existing content and update permissions remain in place.

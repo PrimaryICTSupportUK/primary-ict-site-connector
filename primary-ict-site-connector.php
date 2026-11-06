@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Primary ICT Support Site Connector
  * Description: Pairs this site with the Primary ICT Support dashboard and collects WordPress/PHP inventory and runs authorised component updates.
- * Version: 0.8.2
+ * Version: 0.8.3
  * Author: Primary ICT Support
  * Requires at least: 6.5
  * Requires PHP: 8.0
@@ -23,7 +23,7 @@ final class PICTS_Site_Connector {
     private const OPTION = 'picts_connector_settings';
     private const HOOK = 'picts_connector_inventory';
     private const RESUME_HOOK = 'picts_connector_inventory_resume';
-    private const VERSION = '0.8.2';
+    private const VERSION = '0.8.3';
     private static ?Primary_ICT_Support_GitHub_Updater_V2 $updater = null;
 
     public static function init(): void {
@@ -269,7 +269,7 @@ final class PICTS_Site_Connector {
         echo '<p>Last check: ' . (!empty($release['checked_at']) ? esc_html(wp_date('j M Y, H:i', $release['checked_at'])) : 'Not recorded') . ' · Next automatic check eligible: ' . (!empty($release['next_check_at']) ? esc_html(wp_date('j M Y, H:i', $release['next_check_at'])) : 'On next WordPress update check') . '</p>';
         echo '<form action="' . esc_url(admin_url('admin-post.php')) . '" method="post"><input type="hidden" name="action" value="picts_release_check">';
         wp_nonce_field('picts_release_check'); submit_button('Check connector updates now', 'secondary');
-        echo '</form><details><summary>How connector updates work</summary><p>Use normal WordPress Update now controls. Successful release checks cache for six hours, failures for fifteen minutes. Updating preserves pairing. Automatic updates can be enabled for this connector in Plugins. Dashboard jobs exclude connector self-updates.</p></details><details><summary>Supported dashboard operations</summary><p>Use the dashboard to read site health, choose content permissions and request supported software updates. Each website’s settings and staff approvals apply. The dashboard shows the available actions and any setup still needed.</p></details></div></div>';
+        echo '</form><details><summary>How connector updates work</summary><p>Use normal WordPress Update now controls. Successful release checks cache for six hours, failures for fifteen minutes. Updating preserves pairing. Automatic updates can be enabled for this connector in Plugins. Dashboard and authorised AI requests can update this connector from a verified release when the dashboard supports the new version.</p></details><details><summary>Supported dashboard operations</summary><p>Use the dashboard to read site health, choose content permissions and request supported software updates. Each website’s settings and staff approvals apply. The dashboard shows the available actions and any setup still needed.</p></details></div></div>';
 
     }
 }

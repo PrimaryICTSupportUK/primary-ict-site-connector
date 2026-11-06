@@ -2,7 +2,7 @@
 Contributors: primaryict
 Requires at least: 6.5
 Requires PHP: 8.0
-Stable tag: 0.8.2
+Stable tag: 0.8.3
 License: GPLv2 or later
 
 WordPress inventory and queued diagnostic checks for the Primary ICT Support staff dashboard. Runs individually authorised dashboard component updates.
@@ -44,11 +44,14 @@ The connector runs outbound HTTPS only; no WordPress password or new inbound end
 Delete the plugin to remove its local settings and credential. Ask the dashboard administrator to revoke its server-side site credential.
 
 == Connector GitHub releases ==
-The native WordPress updater uses public releases from PrimaryICTSupportUK/primary-ict-site-connector. The repository/release channel must be published before automatic discovery works. Releases require a stable vMAJOR.MINOR.PATCH tag, the exact primary-ict-site-connector-VERSION.zip asset and its GitHub SHA-256 digest. Normal WordPress update controls and optional native automatic updates are used; the connector does not enable them for you. No GitHub credential is stored on the site. The dashboard still excludes connector self-updates. Trusted mapped public GitHub plugin jobs are supported.
+The native WordPress updater uses public releases from PrimaryICTSupportUK/primary-ict-site-connector. The repository/release channel must be published before automatic discovery works. Releases require a stable vMAJOR.MINOR.PATCH tag, the exact primary-ict-site-connector-VERSION.zip asset and its GitHub SHA-256 digest. Normal WordPress update controls and optional native automatic updates are used; the connector does not enable them for you. No GitHub credential is stored on the site. Dashboard and authorised AI requests can update the connector from a verified release when the dashboard supports the new version. Trusted mapped public GitHub plugin jobs are supported.
 
 From connector 0.5.1, use Check connector updates now to bypass cached release metadata. Repeated clicks are limited to one check per minute. Last/next check times and provider failures are visible.
 
 == Changelog ==
+
+= 0.8.3 =
+* Allow verified connector self-updates with restart-safe result checking.
 
 = 0.8.2 =
 * Recognise WordPress.org directory update identifiers.
