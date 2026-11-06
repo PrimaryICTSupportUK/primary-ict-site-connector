@@ -6,7 +6,8 @@ plugin preserves its pairing. No dashboard source, credentials or tenant data ar
 
 This plugin shares the branded menu with other Primary ICT Support plugins and uses normal
 WordPress controls for its own public GitHub release updates. Automatic updates are optional.
-The server-side dashboard still excludes connector self-updates from its maintenance jobs.
+From version 0.8.3, the dashboard can request a connector self-update when it recognises
+both installed and target versions. Existing older connectors need one WordPress update first.
 
 ## Publish a release
 

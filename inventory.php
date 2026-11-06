@@ -18,6 +18,13 @@ final class PICTS_Inventory {
         return strlen($url) <= 500 ? $url : null;
     }
     private static function provider(array $update, string $update_uri): string {
+        // WordPress uses a scheme-less directory identifier, e.g. w.org/plugins/akismet.
+        // An explicit third-party Update URI still takes precedence over that identifier.
+        if ($update_uri !== '') {
+            $host = strtolower((string) (wp_parse_url($update_uri, PHP_URL_HOST) ?? ''));
+            if ($host !== 'wordpress.org' && !str_ends_with($host, '.wordpress.org')) { return 'custom'; }
+        }
+        if ($update_uri === '' && preg_match('~^w\.org/(?:plugins|themes)/[a-z0-9-]+$~D', (string) ($update['id'] ?? ''))) { return 'wordpress_org'; }
         foreach ([$update['id'] ?? '', $update['url'] ?? '', $update_uri] as $url) {
             $host = strtolower((string) (wp_parse_url((string) $url, PHP_URL_HOST) ?? ''));
             if ($host === 'wordpress.org' || str_ends_with($host, '.wordpress.org')) { return 'wordpress_org'; }
@@ -78,6 +85,9 @@ final class PICTS_Inventory {
             $data = [];
             foreach (['Name', 'Version', 'Author', 'Description', 'ThemeURI', 'RequiresWP', 'RequiresPHP', 'UpdateURI'] as $key) { $data[$key] = $theme->get($key); }
             $component = self::component('theme', $slug, $data, (array) ($theme_responses[$slug] ?? []), $theme_no_updates, $theme_auto);
+            $package = wp_parse_url((string) ($theme_responses[$slug]['package'] ?? ''));
+            $host = strtolower((string) ($package['host'] ?? ''));
+            $component['native_package_host'] = $component['provider'] === 'custom' && ($package['scheme'] ?? '') === 'https' && empty($package['user']) && empty($package['pass']) && empty($package['port']) && empty($package['fragment']) && preg_match('/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/D',$host) ? $host : null;
             $component['active'] = get_stylesheet() === $slug;
             $parent = (string) $theme->get('Template');
             $component['parent'] = $parent !== '' ? $parent : null;

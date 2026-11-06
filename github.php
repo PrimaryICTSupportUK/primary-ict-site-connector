@@ -38,22 +38,35 @@ final class PICTS_GitHub_Source {
         if ($zip->open($file) !== true) { return false; }
         try {
             if ($zip->numFiles > 5000) { return false; }
-            $bytes = 0; $prefix = dirname($target['plugin_id']) . '/';
+            $theme = ($target['kind'] ?? '') === 'theme';
+            $identity = $theme ? $target['theme_id'] . '/style.css' : $target['plugin_id'];
+            $bytes = 0; $prefix = $theme ? $target['theme_id'] . '/' : dirname($identity) . '/';
             for ($index = 0; $index < $zip->numFiles; $index++) {
                 $entry = $zip->statIndex($index);
                 if (!$entry || !str_starts_with($entry['name'], $prefix) || str_contains($entry['name'], '..') || str_contains($entry['name'], '\\') || str_contains($entry['name'], "\0")) { return false; }
                 $bytes += $entry['size']; if ($bytes > 128 * 1024 * 1024) { return false; }
                 if ($zip->getExternalAttributesIndex($index, $system, $attributes) && (($attributes >> 16) & 0170000) === 0120000) { return false; }
             }
-            $entry = $zip->statName($target['plugin_id']);
+            $entry = $zip->statName($identity);
             if (!$entry || $entry['size'] > 256000) { return false; }
-            $main = $zip->getFromName($target['plugin_id']);
+            $main = $zip->getFromName($identity);
+            if ($theme) {
+                if (!is_string($main) || !preg_match('/^[ \t\/*#@]*Theme Name:\s*([^\r\n]+)/mi',$main,$name) || trim($name[1]) === '') { return false; }
+                preg_match('/^[ \t\/*#@]*Template:\s*([^\r\n]+)/mi',$main,$parent);
+                if ((isset($parent[1]) ? trim($parent[1]) : null) !== ($target['theme_parent'] ?? null)) { return false; }
+            }
             return is_string($main) && preg_match('/^[ \t\/*#@]*Version:\s*([^\r\n]+)/mi', $main, $version) && trim($version[1]) === $target['to_version'];
         } finally { $zip->close(); }
     }
     public static function download($reply, string $package, array $hook_extra, array $target) {
         if (($hook_extra['plugin'] ?? '') !== $target['plugin_id']) { return $reply; }
-        if ($reply !== false || $package !== self::package($target['source'])) { return new WP_Error('picts_package_changed', 'The selected package was changed or intercepted. Installation stopped.'); }
+        if ($package !== self::package($target['source'])) { return new WP_Error('picts_package_changed', 'The selected package was changed or intercepted. Installation stopped.'); }
+        // The connector's normal WordPress updater has already downloaded its
+        // own release. Independently verify those exact bytes and contents.
+        if ($reply !== false) {
+            if (($target['plugin_id'] ?? '') === 'primary-ict-site-connector/primary-ict-site-connector.php' && is_string($reply) && is_file($reply) && hash_equals($target['source']['sha256'], (string) hash_file('sha256', $reply)) && self::inspect($reply, $target)) { return $reply; }
+            return new WP_Error('picts_package_changed', 'The selected package was changed or intercepted. Installation stopped.');
+        }
         require_once ABSPATH . 'wp-admin/includes/file.php';
         $file = download_url($package, 60);
         if (is_wp_error($file)) { return $file; }

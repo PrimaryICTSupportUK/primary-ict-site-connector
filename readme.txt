@@ -2,7 +2,7 @@
 Contributors: primaryict
 Requires at least: 6.5
 Requires PHP: 8.0
-Stable tag: 0.7.2
+Stable tag: 0.8.3
 License: GPLv2 or later
 
 WordPress inventory and queued diagnostic checks for the Primary ICT Support staff dashboard. Runs individually authorised dashboard component updates.
@@ -32,21 +32,37 @@ Catalogues upload in batches of up to 25 components and 25 update candidates, wi
 PHP configuration limits are not account resource usage. Hosting disk quota is unknown. Ordinary inventory includes cached candidates; explicit dashboard checks invoke WordPress.org core/plugin/theme checks and record success/failure/skipped evidence. Custom providers require explicit administrator approval of the native package host and a local WordPress update candidate; unsupported hosts and redirects are refused. Diagnostics include three selected Site Health checks, not a full audit. Native auto-update selections do not establish effective behaviour under filters. WordPress Multisite is identified, but update jobs require a single site. Exact targets support WordPress.org plugins, themes, core and translation packs, trusted public GitHub plugins, and explicitly approved native vendor plugins. Jobs require an allowed dashboard policy, single-use service permission, compatible versions and direct filesystem access. Installation runs in cron; a later WordPress request verifies the selected version, theme selection, core database version or translation content hashes. Interrupted writes require staff review with fresh inventory. Core major releases require explicit policy opt-in. Package URLs and credentials remain on WordPress. Connector self-update remains with the native GitHub updater. These additions require the compatible 0.6.0 service; older 0.5.1 connectors retain their plugin-only execution protocol.
 
 == Content management ==
-Requires the compatible 0.7.2 service. All content permissions start disabled per site. Staff first allow reading, request author metadata, and select an existing WordPress user. Every read/write checks that user's native WordPress permissions; content works only on single-site installations. Ordinary posts/pages and JPEG/PNG/WebP images are supported. Custom post types, page builder metadata, remote image fetching and permanent deletion are excluded.
+Requires the compatible dashboard service deployed before this connector release. All content permissions start disabled per site. Staff first allow reading, request author metadata, and select an existing WordPress user. Every read/write checks that user's native WordPress permissions; content works only on single-site installations. Ordinary posts/pages and JPEG/PNG/WebP images are supported. Custom post types, page builder metadata, remote image fetching and permanent deletion are excluded.
 Draft creation/editing and image upload are separate opt-ins. Publishing, scheduled publishing, live edits, trash and restore need the site's publishing permission and normally staff approval. Approval covers an immutable request and its exact saved WordPress version. Scheduled publishing remains a service job: WordPress stays draft until due and permissions are checked again.
 Content bodies are bounded at 64 KiB. List summaries show larger items with an explicit WordPress-editor link. Images are limited to 2 MiB and 16 million pixels. WordPress images normally become public even if the associated post is a draft.
 Writes use a single-use grant, a local receipt and later-request verification. Content and maintenance writes share a lock. Existing edits require the exact content fingerprint and InnoDB transactions. Native WordPress hooks run normally; third-party external side effects cannot be rolled back by the connector. Ambiguous writes are never retried automatically. Staff inspect fresh affected content and record their findings to release a write hold.
+
+An administrator can explicitly prepare the five required tables from the connector settings page after confirming a restorable database backup. Only MyISAM tables are converted. The WordPress database account must have ALTER permission, InnoDB must be available, PHP must support mysqli and atomic hard links in the WordPress root, and database advisory locks must be connection-affine. An existing .maintenance file is never overwritten. A progress count records verified tables, not percentage within a table. Maintenance mode affects ordinary WordPress requests; caches, already running requests and other applications can bypass it. On interruption, check the operation before retrying. A timed-out database change may have completed; tables are converted individually and cannot be rolled back as one transaction. If the connector page is unavailable, ask the host to verify no conversion is still running and help remove the connector-owned .maintenance file. Multisite remains unsupported. The backup acknowledgement does not verify a backup.
 The connector runs outbound HTTPS only; no WordPress password or new inbound endpoint is needed. Server history is retained for at least six months. Uploaded base64 image bodies are removed from settled job payloads.
 
 == Uninstallation ==
 Delete the plugin to remove its local settings and credential. Ask the dashboard administrator to revoke its server-side site credential.
 
 == Connector GitHub releases ==
-The native WordPress updater uses public releases from PrimaryICTSupportUK/primary-ict-site-connector. The repository/release channel must be published before automatic discovery works. Releases require a stable vMAJOR.MINOR.PATCH tag, the exact primary-ict-site-connector-VERSION.zip asset and its GitHub SHA-256 digest. Normal WordPress update controls and optional native automatic updates are used; the connector does not enable them for you. No GitHub credential is stored on the site. The dashboard still excludes connector self-updates. Trusted mapped public GitHub plugin jobs are supported.
+The native WordPress updater uses public releases from PrimaryICTSupportUK/primary-ict-site-connector. The repository/release channel must be published before automatic discovery works. Releases require a stable vMAJOR.MINOR.PATCH tag, the exact primary-ict-site-connector-VERSION.zip asset and its GitHub SHA-256 digest. Normal WordPress update controls and optional native automatic updates are used; the connector does not enable them for you. No GitHub credential is stored on the site. Dashboard and authorised AI requests can update the connector from a verified release when the dashboard supports the new version. Trusted mapped public GitHub plugin jobs are supported.
 
 From connector 0.5.1, use Check connector updates now to bypass cached release metadata. Repeated clicks are limited to one check per minute. Last/next check times and provider failures are visible.
 
 == Changelog ==
+
+= 0.8.3 =
+* Allow verified connector self-updates with restart-safe result checking.
+
+= 0.8.2 =
+* Recognise WordPress.org directory update identifiers.
+
+= 0.8.1 =
+* Adds administrator-started database preparation with a backup acknowledgement, maintenance mode, table progress and interrupted-operation review.
+* Pauses other controls on the preparation page while work is underway.
+* Requires the compatible dashboard service before installation.
+
+= 0.8.0 =
+Guided setup with a single connection-details block, clear expiry recovery and a safe link back to the dashboard. Requires the compatible service release.
 
 = 0.7.2 =
 * Preserve literal backslashes in image text and verify saved image metadata.
