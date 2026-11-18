@@ -22,17 +22,27 @@ final class PICTS_Native_Source {
         $cache = get_site_transient($theme ? 'update_themes' : 'update_plugins');
         $candidate = $cache->response[$id] ?? null;
         $expected = $theme ? (string) (((array) $candidate)['package'] ?? '') : (string) ($candidate->package ?? '');
-        if ($reply !== false || $package !== $expected || !self::allows($package, $target['native_source'])) { return new WP_Error('picts_package_changed', 'The approved native package changed.'); }
+        if ($reply !== false) { return new WP_Error('picts_package_intercepted', 'Another updater intercepted this package.'); }
+        if ($package !== $expected) { return new WP_Error('picts_package_changed', 'The approved native package changed.'); }
+        if (!self::allows($package, $target['native_source'])) { return new WP_Error('picts_package_host_unapproved', 'The package host is not approved.'); }
         // Safe WordPress HTTP rejects private destinations; no redirect may escape the exact approved host.
         $http = static function ($args, $url) use ($package) { if ($url === $package) { $args['redirection']=0; $args['sslverify']=true; $args['reject_unsafe_urls']=true; $args['limit_response_size']=self::MAX_PACKAGE_BYTES + 1; } return $args; };
         add_filter('http_request_args', $http, PHP_INT_MAX, 2);
         try { $file = download_url($package, 60); }
         finally { remove_filter('http_request_args', $http, PHP_INT_MAX); }
-        if (is_wp_error($file)) { return new WP_Error('picts_package_download', 'The approved native package could not be downloaded.'); }
+        if (is_wp_error($file)) {
+            // Only a validated status class crosses the boundary; WP_Error data
+            // may include vendor response bodies, package URLs or credentials.
+            $data = $file->get_error_code() === 'http_404' ? $file->get_error_data() : null;
+            $status = is_array($data) && is_int($data['code'] ?? null) ? $data['code'] : 0;
+            $code = $status >= 300 && $status <= 399 ? 'picts_package_redirect' : (in_array($status, [401,403], true) ? 'picts_package_denied' : ($status === 404 ? 'picts_package_not_found' : 'picts_package_download'));
+            return new WP_Error($code, 'The approved native package could not be downloaded.');
+        }
         // The extra byte distinguishes a response truncated by the HTTP cap from an allowed archive.
         clearstatcache(true, $file);
         $size = filesize($file);
-        if ($size === false || $size > self::MAX_PACKAGE_BYTES || !PICTS_GitHub_Source::inspect($file, $target)) { wp_delete_file($file); return new WP_Error('picts_package_invalid', 'The native package identity did not match.'); }
+        if ($size !== false && $size > self::MAX_PACKAGE_BYTES) { wp_delete_file($file); return new WP_Error('picts_package_too_large', 'The native package exceeds the size limit.'); }
+        if ($size === false || !PICTS_GitHub_Source::inspect($file, $target)) { wp_delete_file($file); return new WP_Error('picts_package_invalid', 'The native package identity did not match.'); }
         return $file;
     }
 }

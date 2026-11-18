@@ -64,6 +64,7 @@ final class PICTS_Plugin_Update {
         $reason = self::guard($pending['job']['target']);
         if ($reason) { self::stop($pending, $reason); return; }
         require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
+        require_once __DIR__ . '/upgrader-diagnostics.php';
         if (!WP_Upgrader::create_lock('auto_updater')) { self::stop($pending, 'updater_busy'); return; }
         $target = $pending['job']['target'];
         $download = isset($target['source']) ? static fn ($reply, $package, $upgrader, $extra) => PICTS_GitHub_Source::download($reply, $package, $extra, $target) : null;
@@ -91,10 +92,13 @@ final class PICTS_Plugin_Update {
                 $pending['stage'] = 'verify';
                 if (!update_option('picts_connector_pending_job', $pending, false)) { self::stop($pending, 'worker_error'); return; }
             }
-            $skin = new Automatic_Upgrader_Skin();
+            $skin = new PICTS_Upgrader_Diagnostic_Skin();
             $upgrader = new Plugin_Upgrader($skin);
             $result = $upgrader->upgrade($pending['job']['target']['plugin_id'], ['clear_update_cache' => true]);
-            if ($result !== true || is_wp_error($result)) { self::stop($pending, 'upgrader_failed', 'failed'); return; }
+            if ($result !== true || is_wp_error($result)) {
+                $pending['report']['update']['error_detail'] = $skin->diagnostic() ?? PICTS_Upgrader_Diagnostic_Skin::classify($result);
+                self::stop($pending, 'upgrader_failed', 'failed'); return;
+            }
             $pending['executed_request'] = self::request_id();
             $pending['stage'] = 'verify'; // The next invocation boots WordPress with the new files.
         } finally {
