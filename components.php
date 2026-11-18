@@ -78,6 +78,7 @@ final class PICTS_Component_Update {
         $t = $p['job']['target']; $reason = self::guard($t);
         if ($reason) { self::stop($p, $reason); return; }
         require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
+        require_once __DIR__ . '/upgrader-diagnostics.php';
         if (!WP_Upgrader::create_lock('auto_updater')) { self::stop($p, 'updater_busy'); return; }
         $translations = ['Language_Pack_Upgrader','async_upgrade']; $priority = has_action('upgrader_process_complete', $translations);
         if ($priority !== false) { remove_action('upgrader_process_complete', $translations, $priority); }
@@ -99,7 +100,7 @@ final class PICTS_Component_Update {
                 $native_download = static fn ($reply,$package,$upgrader,$extra) => PICTS_Native_Source::download($reply,$package,(array) $extra,$t);
                 add_filter('upgrader_pre_download',$native_download,PHP_INT_MAX,4);
             }
-            $skin = new Automatic_Upgrader_Skin();
+            $skin = new PICTS_Upgrader_Diagnostic_Skin();
             if ($t['kind'] === 'theme') { $result = (new Theme_Upgrader($skin))->upgrade($t['theme_id'], ['clear_update_cache'=>true]); $ok = $result === true; }
             elseif ($t['kind'] === 'core') { $result = (new Core_Upgrader($skin))->upgrade($c, ['attempt_rollback'=>false]); $ok = is_string($result) && $result === $t['to_version']; }
             else {
@@ -109,7 +110,10 @@ final class PICTS_Component_Update {
                 $ok = is_array($result) && count($result) === 1 && is_array($result[0]) && !empty($upgrader->manifest);
                 if ($ok) { $p['translation_manifest'] = $upgrader->manifest; }
             }
-            if (!$ok || is_wp_error($result)) { self::stop($p, 'upgrader_failed', 'failed'); return; }
+            if (!$ok || is_wp_error($result)) {
+                $p['report']['update']['error_detail'] = $skin->diagnostic() ?? PICTS_Upgrader_Diagnostic_Skin::classify($result);
+                self::stop($p, 'upgrader_failed', 'failed'); return;
+            }
             $p['executed_request'] = self::request_id(); $p['stage'] = 'verify';
             // If this persistence is interrupted, the earlier grant_attempted marker refuses another install.
             if (!update_option('picts_connector_pending_job', $p, false)) { self::stop($p, 'interrupted', 'uncertain'); }

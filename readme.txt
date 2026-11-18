@@ -2,7 +2,7 @@
 Contributors: primaryict
 Requires at least: 6.5
 Requires PHP: 8.0
-Stable tag: 0.8.3
+Stable tag: 0.8.4
 License: GPLv2 or later
 
 WordPress inventory and queued diagnostic checks for the Primary ICT Support staff dashboard. Runs individually authorised dashboard component updates.
@@ -22,7 +22,7 @@ Ordinary inventory does not include content or a user list. When staff enable co
 Upload this ZIP over the installed connector and choose Replace current with uploaded. Activate if needed. Existing pairing settings are preserved; do not uninstall/delete the connector first. Open Primary ICT Support > Site Connector and click Poll dashboard jobs now. No new pairing code is normally required.
 
 == Dashboard jobs ==
-The connector claims fixed-purpose inventory collection, WordPress.org update-check and individually authorised component-update jobs for this site. Each invocation runs one bounded phase and reports safe statuses, selected Site Health results and a service-accepted inventory receipt. Failed/unobserved WordPress.org checks preserve the previous cached update list. Local locks prevent overlapping work. The service enforces leases, deadlines and at most three claims for read jobs. Update jobs have one claim and are never retried automatically.
+The connector claims fixed-purpose inventory collection, WordPress.org update-check and individually authorised component-update jobs for this site. Each invocation runs one bounded phase and reports safe statuses, selected Site Health results and a service-accepted inventory receipt. Failed or unobserved ordinary WordPress.org checks preserve the previous cached update list. After a verified plugin or theme update, a failed candidate refresh instead discards that component type's stale cache so subsequent work remains held safely. Local locks prevent overlapping work. The service enforces leases, deadlines and at most three claims for read jobs. Update jobs have one claim and are never retried automatically.
 Collection and idle polling intervals inherit dashboard defaults or per-site overrides. Running jobs resume each minute. For idle sites, the dashboard centrally requests the standard public wp-cron.php endpoint; this does not send management credentials. Existing WordPress scheduled tasks can also run. Firewalls or host outages can block wakeups. A service-recorded authenticated cron poll establishes contact at that time, not future reliability. Host cron is an optional fallback.
 
 == Upload behaviour ==
@@ -49,6 +49,9 @@ The native WordPress updater uses public releases from PrimaryICTSupportUK/prima
 From connector 0.5.1, use Check connector updates now to bypass cached release metadata. Repeated clicks are limited to one check per minute. Last/next check times and provider failures are visible.
 
 == Changelog ==
+
+= 0.8.4 =
+Refresh update candidates after verified plugin and theme updates before sending inventory.
 
 = 0.8.3 =
 * Allow verified connector self-updates with restart-safe result checking.

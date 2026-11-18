@@ -8,7 +8,7 @@ final class PICTS_Check_Jobs {
     private const HOOK = 'picts_connector_poll';
     private const RESUME = 'picts_connector_job_resume';
     private const PENDING = 'picts_connector_pending_job';
-    private const VERSION = '0.8.3';
+    private const VERSION = '0.8.4';
     public static function init(): void {
         add_filter('cron_schedules', [self::class, 'schedule']);
         add_action('init', [self::class, 'ensure_schedule']);
@@ -134,10 +134,26 @@ final class PICTS_Check_Jobs {
                     $pending['report']['checks'][] = self::check($stage, $pending);
                     $pending['stage'] = ['core' => 'plugin', 'plugin' => 'theme', 'theme' => 'diagnostics'][$stage];
                 } elseif ($stage === 'diagnostics') {
-                    $pending['report']['diagnostics'] = self::diagnostics();
-                    if (($pending['report']['update']['outcome'] ?? '') === 'updated' && array_filter($pending['report']['diagnostics']['health_checks'], static fn ($check) => $check['status'] === 'critical')) { PICTS_Plugin_Update::stop($pending, 'health_check_failed', 'failed'); $pending['report']['failure'] = 'post_update_failed'; }
-                    $pending['stage'] = 'inventory';
-                    $pending['fresh_inventory_started'] = false;
+                    // Successful WordPress upgrades clear their update transient.
+                    // Refresh before sending the completion inventory so later
+                    // queued components are not mistaken for missing approvals.
+                    $action = $pending['job']['action'];
+                    $refresh = ($pending['report']['update']['outcome'] ?? '') === 'updated' && in_array($action, ['update_plugin', 'update_theme'], true);
+                    if ($refresh && empty($pending['post_update_candidates_refreshed'])) {
+                        $category = $action === 'update_plugin' ? 'plugin' : 'theme';
+                        try { $result = self::check($category, $pending); }
+                        catch (Throwable $error) { self::restore_interrupted($pending); $result = ['category' => $category, 'status' => 'failed', 'reason' => 'provider_error', 'checked_at' => gmdate('Y-m-d\TH:i:s\Z'), 'provider' => 'wordpress_org']; }
+                        // An unsuccessful refresh must never leave stale candidate
+                        // metadata looking current. Subsequent admission fails closed.
+                        if ($result['status'] !== 'success') { delete_site_transient('update_' . $category . 's'); }
+                        $pending['report']['post_update_refresh'] = $result;
+                        $pending['post_update_candidates_refreshed'] = true;
+                    } else {
+                        $pending['report']['diagnostics'] = self::diagnostics();
+                        if (($pending['report']['update']['outcome'] ?? '') === 'updated' && array_filter($pending['report']['diagnostics']['health_checks'], static fn ($check) => $check['status'] === 'critical')) { PICTS_Plugin_Update::stop($pending, 'health_check_failed', 'failed'); $pending['report']['failure'] = 'post_update_failed'; }
+                        $pending['stage'] = 'inventory';
+                        $pending['fresh_inventory_started'] = false;
+                    }
                 } elseif ($stage === 'inventory') {
                     if (PICTS_Site_Connector::send_inventory($pending['job']['id'])) {
                         $last = (array) get_option('picts_connector_last_result', []);
